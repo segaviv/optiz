@@ -64,7 +64,7 @@ public:
     _val /= b._val;
     _grad /= b._val;
     _grad -= b._grad * (_val / b._val);
-    _hessian -= _grad * b._grad.transpose() + b._grad * _grad.transpose() -
+    _hessian -= _grad * b._grad.transpose() + b._grad * _grad.transpose() +
                 _val * b._hessian;
     _hessian /= b._val;
     return *this;

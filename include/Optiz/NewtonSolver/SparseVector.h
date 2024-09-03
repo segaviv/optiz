@@ -11,7 +11,7 @@ namespace Optiz {
 
 class SparseVector {
  public:
-  SparseVector(long size);
+  SparseVector(long size = -1);
   SparseVector(SparseVector&&) noexcept;
   SparseVector(const SparseVector&) = default;
 
@@ -42,8 +42,8 @@ class SparseVector {
     return values.end();
   }
 
-  inline long rows() const { return _size; }
-  inline long size() const { return _size; }
+  inline long rows() const { return size(); }
+  inline long size() const { return _size >= 0? _size : values.max_key(); }
 
  private:
   VectorMap<long, double> values;

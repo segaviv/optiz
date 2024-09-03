@@ -19,8 +19,6 @@ class Var {
   Var& operator=(const Var& other) = default;
   Var& operator=(Var&&);
 
-  static void set_num_vars(int new_num_vars);
-
   // Getters.
   double val() const;
   inline double& val() { return _val; }
@@ -39,6 +37,7 @@ class Var {
   void reserve(int n);
 
   friend std::ostream& operator<<(std::ostream& s, const Var& var);
+  std::string referenced_str() const;
 
   // Operators.
   Var& operator*=(const Var& b);
@@ -135,8 +134,6 @@ class Var {
   double _val;
   SparseVector _grad;
   SelfAdjointMapMatrix _hessian;
-
-  static int num_vars;
 };
 
 }  // namespace Optiz

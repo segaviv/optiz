@@ -1,18 +1,11 @@
-#if __INTELLISENSE__
-#undef __ARM_NEON
-#undef __ARM_NEON__
-#endif
-
 #include "SparseVector.h"
-
-#include <vector>
 
 namespace Optiz {
 SparseVector::SparseVector(long size) : _size(size) {}
 SparseVector::SparseVector(SparseVector&&) noexcept = default;
 
 Eigen::VectorXd SparseVector::to_dense() const {
-  Eigen::VectorXd dense = Eigen::VectorXd::Zero(_size);
+  Eigen::VectorXd dense = Eigen::VectorXd::Zero(size());
   for (const auto& val : values) {
     dense(val.first) = val.second;
   }
@@ -20,7 +13,7 @@ Eigen::VectorXd SparseVector::to_dense() const {
 }
 
 Eigen::SparseVector<double> SparseVector::to_sparse() const {
-  Eigen::SparseVector<double> sparse(_size);
+  Eigen::SparseVector<double> sparse(size());
   for (const auto& val : values) {
     sparse.insert(val.first) = val.second;
   }

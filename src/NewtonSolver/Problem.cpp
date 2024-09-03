@@ -219,7 +219,6 @@ Eigen::VectorXd Problem::factorize_and_solve() {
 }
 
 Problem &Problem::optimize() {
-  Var::set_num_vars(_cur.size());
   // Filter for constrained optimization.
   std::vector<std::pair<double, double>> filter;
   if (!constraints_energies.empty()) {
@@ -294,7 +293,6 @@ Problem &Problem::optimize() {
 
 std::tuple<double, Eigen::VectorXd &, Eigen::SparseMatrix<double> &>
 Problem::calc_derivatives() {
-  Var::set_num_vars(_cur.size());
   std::tie(_last_f, _last_grad, _last_hessian) =
       block_start_indices.empty()
           ? calc_energy_with_derivatives(energies, VarFactory(_cur, _cur_shape))

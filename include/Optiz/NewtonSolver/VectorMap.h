@@ -1,18 +1,18 @@
 #pragma once
+#include <functional>
 #include <vector>
 
 namespace Optiz {
-template <typename K, typename V>
-class VectorMap {
- public:
+template <typename K, typename V> class VectorMap {
+public:
   VectorMap(int reserved_size = 10) { values.reserve(reserved_size); }
-  VectorMap(const VectorMap&) = default;
-  VectorMap(VectorMap&&) noexcept = default;
-  VectorMap& operator=(const VectorMap&) = default;
-  VectorMap& operator=(VectorMap&&) = default;
+  VectorMap(const VectorMap &) = default;
+  VectorMap(VectorMap &&) noexcept = default;
+  VectorMap &operator=(const VectorMap &) = default;
+  VectorMap &operator=(VectorMap &&) = default;
 
-  V& operator[](const K& key) {
-    for (auto& val : values) {
+  V &operator[](const K &key) {
+    for (auto &val : values) {
       if (val.first == key) {
         return val.second;
       }
@@ -21,8 +21,8 @@ class VectorMap {
     return values.back().second;
   }
 
-  V operator[](const K& key) const {
-    for (auto& val : values) {
+  V operator[](const K &key) const {
+    for (auto &val : values) {
       if (val.first == key) {
         return val.second;
       }
@@ -31,33 +31,33 @@ class VectorMap {
   }
 
   class iterator {
-   public:
+  public:
     iterator(typename std::vector<std::pair<K, V>>::iterator it) : it(it) {}
 
-    std::pair<K, V>& operator*() { return *it; }
-    iterator& operator++() {
+    std::pair<K, V> &operator*() { return *it; }
+    iterator &operator++() {
       ++it;
       return *this;
     }
-    bool operator!=(const iterator& other) { return it != other.it; }
+    bool operator!=(const iterator &other) { return it != other.it; }
 
-   private:
+  private:
     typename std::vector<std::pair<K, V>>::iterator it;
   };
 
   class const_iterator {
-   public:
+  public:
     const_iterator(typename std::vector<std::pair<K, V>>::const_iterator it)
         : it(it) {}
 
-    const std::pair<K, V>& operator*() const { return *it; }
-    const_iterator& operator++() {
+    const std::pair<K, V> &operator*() const { return *it; }
+    const_iterator &operator++() {
       ++it;
       return *this;
     }
-    bool operator!=(const const_iterator& other) { return it != other.it; }
+    bool operator!=(const const_iterator &other) { return it != other.it; }
 
-   private:
+  private:
     typename std::vector<std::pair<K, V>>::const_iterator it;
   };
 
@@ -68,7 +68,7 @@ class VectorMap {
 
   size_t size() const { return values.size(); }
 
-  std::pair<iterator, bool> try_emplace(const K& key, const V& val) {
+  std::pair<iterator, bool> try_emplace(const K &key, const V &val) {
     for (auto it = values.begin(); it != values.end(); ++it) {
       if (it->first == key) {
         return std::make_pair(iterator(it), false);
@@ -78,7 +78,20 @@ class VectorMap {
     return std::make_pair(iterator(values.end() - 1), true);
   }
 
- private:
+  auto max(const auto &elem_func) const {
+    auto res = elem_func(values[0]);
+    for (int i = 1; i < values.size(); i++) {
+      if (elem_func(values[i]) > res)
+        res = elem_func(values[i]);
+    }
+    return res;
+  }
+
+  K max_key() const {
+    return max([](const auto&p) { return p.first; }) + 1;
+  }
+
+private:
   std::vector<std::pair<K, V>> values;
 };
-}  // namespace Optiz
+} // namespace Optiz

@@ -13,7 +13,7 @@ std::tuple<
   std::unordered_map<int, int> sp_to_dense;
   int new_index = 0;
   for (const auto &val : mat.get_values()) {
-    int row = val.first / mat.cols(), col = val.first % mat.cols();
+    int row = val.first.row, col = val.first.col;
     if (sp_to_dense.try_emplace(row, new_index).second) {
       new_index++;
     }
@@ -35,7 +35,7 @@ sparse_to_dense(const SelfAdjointMapMatrix &mat) {
 
   Eigen::MatrixX<double> res(sp_to_dense.size(), sp_to_dense.size());
   for (const auto &val : mat.get_values()) {
-    int row = val.first / mat.cols(), col = val.first % mat.cols();
+    int row = val.first.row, col = val.first.col;
     int r = sp_to_dense[row], c = sp_to_dense[col];
     res(r, c) = val.second;
     res(c, r) = val.second;
