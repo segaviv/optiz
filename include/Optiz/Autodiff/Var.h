@@ -11,22 +11,23 @@ namespace Optiz {
 class Var {
  public:
   Var();
-  Var(double val);
+  explicit Var(double val);
   Var(const double val, int index);
   Var(const Var&);
   Var(Var&&) noexcept;
 
   Var& operator=(const Var& other) = default;
   Var& operator=(Var&&);
+  Var& operator=(double val);
 
   // Getters.
   double val() const;
   inline double& val() { return _val; }
   inline SparseVector& grad() { return _grad; }
   inline SelfAdjointMapMatrix& hessian() { return _hessian; };
-  SparseVector grad() const;
+  const SparseVector& grad() const;
   Eigen::VectorXd dense_grad() const;
-  SelfAdjointMapMatrix hessian() const;
+  const SelfAdjointMapMatrix& hessian() const;
   using Tup =
       std::tuple<double, Eigen::VectorXd, std::vector<Eigen::Triplet<double>>>;
   operator Tup() const;
@@ -97,6 +98,9 @@ class Var {
   friend Var operator-(double b, Var&& a);
   friend Var operator-(Var&& a, double b);
 
+   Var operator^(const Var& p) {
+    return pow(*this, p.val());
+  }
   friend Var operator-(const Var& a);
   friend Var operator-(Var&& a);
   friend Var operator+(const Var& a);
@@ -115,6 +119,10 @@ class Var {
   friend Var exp(Var&& a);
   friend Var log(const Var& a);
   friend Var log(Var&& a);
+  friend Var cos(const Var& a);
+  friend Var cos(Var&& a);
+  friend Var sin(const Var& a);
+  friend Var sin(Var&& a);
   friend Var atan(const Var& x);
   friend Var atan2(const Var& y, const Var& x);
   friend Var chain2(const Var& x, const Var& y, double val, double dx,

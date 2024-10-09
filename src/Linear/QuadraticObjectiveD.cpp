@@ -28,8 +28,7 @@ QuadraticObjectiveD::QuadraticObjectiveD(const QuadraticObjectiveD &other)
       _known_indices(other._known_indices),
       _unknown_indices(other._unknown_indices),
       _knowns_vals(other._knowns_vals),
-      _hard_constraints(other._hard_constraints),
-      requires_precompute(true) {
+      _hard_constraints(other._hard_constraints), requires_precompute(true) {
   for (auto &term : other._quadratic_terms) {
     _quadratic_terms.push_back(std::make_unique<QuadraticTerm>(*term));
   }
@@ -112,6 +111,26 @@ QuadraticObjectiveD::set_knowns(const Eigen::VectorXi &indices,
   set_known_values(d);
   update_cache();
   return *this;
+}
+
+Eigen::SparseMatrix<double> QuadraticObjectiveD::build_lhs_matrix() const {
+  SparseMatrix Q(n_free(), n_free());
+  for (auto &term : _quadratic_terms) {
+    auto unknown_A = unknown(term->A);
+    Q += term->weight * unknown_A.adjoint() * term->W * unknown_A;
+  }
+  if (_hard_constraints.size() == 0) {
+    return Q;
+  }
+  std::vector<std::vector<SparseMatrix>> mats;
+  mats.push_back({{Q}});
+  for (auto &constraint : _hard_constraints) {
+    auto unknown_C = unknown(constraint.C);
+    mats[0].push_back(unknown_C.adjoint());
+    mats.push_back({{unknown_C}});
+  }
+  SparseMatrix Q_aug = spcat<double>(mats);
+  return Q_aug;
 }
 
 QuadraticObjectiveD &QuadraticObjectiveD::prefactor() {
@@ -207,6 +226,12 @@ QuadraticObjectiveD::MatType QuadraticObjectiveD::solve(const MatType &b) {
   return solve();
 }
 
+int QuadraticObjectiveD::rank() const {
+  SparseMatrix lhs = build_lhs_matrix();
+  Eigen::SparseQR<SparseMatrix, Eigen::COLAMDOrdering<int>> qr(lhs);
+  return qr.rank();
+}
+
 double QuadraticObjectiveD::get_sqrd_error(const MatType &x) const {
   double res = 0;
   for (auto &term : _quadratic_terms) {
@@ -253,7 +278,7 @@ QuadraticObjectiveD::known(const SparseMatrix &mat) {
 }
 
 QuadraticObjectiveD::SparseMatrix
-QuadraticObjectiveD::unknown(const SparseMatrix &mat) {
+QuadraticObjectiveD::unknown(const SparseMatrix &mat) const {
   if (_known_indices.size() == 0) {
     return mat;
   }

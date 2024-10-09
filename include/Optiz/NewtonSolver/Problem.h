@@ -3,7 +3,7 @@
 #include <vector>
 
 #include "Common.h"
-#include "Utils.h"
+#include "ElementFunc.h"
 #include "VarFactory.h"
 
 #define FACTORY_TYPE(x) typename std::decay_t<decltype(x)>::Scalar
@@ -159,6 +159,15 @@ public:
         num_elements, CONVERT_TEMPLATE_ELEMENT_FUNC(energy), project_hessian);
   }
 
+  template <typename EnergyProvider>
+  Problem &add_meta_element_energy(int num_elements, const EnergyProvider &energy,
+                              bool project_hessian = true) {
+    energies.push_back(InternalEnergy{
+        .derivatives_func = meta_element_func(num_elements, energy, project_hessian),
+        .value_func = meta_val_func(num_elements, energy)});
+    return *this;
+  }
+
   template <typename EnergyProvider, IS_ELEMENT_FUNC(EnergyProvider)>
   Problem &add_eq_constraints(int num, const EnergyProvider &energy) {
     int start_ind = _cur.rows();
@@ -233,6 +242,11 @@ public:
   }
 
   void set_end_iteration_callback(std::function<void()> callback);
+  void set_fixed_variarbles(const std::vector<int> &indices,
+                            const std::vector<double> &vals = {});
+
+  void set_fixed_rows(const std::vector<int> &rows_indices,
+                      const Eigen::MatrixXd &vals = Eigen::MatrixXd());
 
   Eigen::Map<Eigen::MatrixXd> x();
   inline double last_f() { return _last_f; }
@@ -263,19 +277,28 @@ private:
   bool first_solve;
   Eigen::VectorXd _cur;
   std::pair<int, int> _cur_shape;
-
   std::vector<int> block_start_indices;
-  std::vector<InternalEnergy> energies;
-  Eigen::SimplicialLDLT<Eigen::SparseMatrix<double>> solver;
-  Eigen::SparseLU<Eigen::SparseMatrix<double>> lu_solver;
+
+  // The indices of the free variables.
+  std::vector<int> free_variables_indices;
+  // Contains -1 for fixed, new index for free.
+  std::vector<int> remove_fixed_mapping;
+
   std::function<void()> _end_iteration_callback = []() {};
 
+  std::vector<InternalEnergy> energies;
+  // Indices of constraint energies.
   std::vector<int> constraints_energies;
 
+  // Last energy, gradient and hessian.
   double _last_constraint_error;
   double _last_f;
   Eigen::VectorXd _last_grad;
   Eigen::SparseMatrix<double> _last_hessian;
+
+  // Solvers.
+  Eigen::SimplicialLDLT<Eigen::SparseMatrix<double>> solver;
+  Eigen::SparseLU<Eigen::SparseMatrix<double>> lu_solver;
 };
 
 } // namespace Optiz

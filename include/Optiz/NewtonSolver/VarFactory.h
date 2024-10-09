@@ -2,7 +2,7 @@
 #include <Eigen/Eigen>
 #include <vector>
 
-#include "Var.h"
+#include "../Autodiff/Var.h"
 
 namespace Optiz {
 

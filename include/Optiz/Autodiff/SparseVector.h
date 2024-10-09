@@ -5,7 +5,7 @@
 #include <unordered_map>
 #include <vector>
 
-#include "VectorMap.h"
+#include "../Common/VectorMap.h"
 
 namespace Optiz {
 
@@ -22,6 +22,7 @@ class SparseVector {
   Eigen::SparseVector<double> to_sparse() const;
 
   double& operator()(long i);
+  double operator()(long i) const;
   double& insert(long i);
 
   SparseVector& operator=(const SparseVector&) = default;

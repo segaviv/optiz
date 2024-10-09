@@ -2,3 +2,4 @@
 #include "NewtonSolver/Problem.h"
 #include "Linear/QuadraticObjectiveCD.h"
 #include "Linear/QuadraticObjectiveD.h"
+#include "Common/Utils.h"

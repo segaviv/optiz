@@ -1,13 +1,8 @@
-#if __INTELLISENSE__
-#undef __ARM_NEON
-#undef __ARM_NEON__
-#endif
-
-#include "Problem.h"
+#include <NewtonSolver/Problem.h>
 
 #include <chrono>
 #include <tuple>
-#include <unordered_map>
+#include <Common/Utils.h>
 using namespace std::chrono;
 
 namespace Optiz {
@@ -106,6 +101,28 @@ Problem::Problem(const std::vector<Eigen::VectorXd> &init,
   }
 }
 
+void extract_free_varaibles(Eigen::VectorXd &grad,
+                            Eigen::SparseMatrix<double> &hessian,
+                            const std::vector<int> &remove_fixed_indices,
+                            const std::vector<int> &free_variable_indices) {
+  // Update the gradient.
+  grad = grad(free_variable_indices).eval();
+  // Update the hessian.
+  std::vector<Eigen::Triplet<double>> triplets;
+  for (int i = 0; i < hessian.outerSize(); i++) {
+    for (Eigen::SparseMatrix<double>::InnerIterator it(hessian, i); it; ++it) {
+      auto [new_col, new_row] = minmax(remove_fixed_indices[it.row()],
+                                       remove_fixed_indices[it.col()]);
+      if (new_col != -1) {
+        triplets.push_back(
+            Eigen::Triplet<double>(new_row, new_col, it.value()));
+      }
+    }
+  }
+  hessian.resize(free_variable_indices.size(), free_variable_indices.size());
+  hessian.setFromTriplets(triplets.begin(), triplets.end());
+}
+
 void compress(Eigen::VectorXd &grad, Eigen::SparseMatrix<double> &hessian,
               std::vector<int> &compress_inds,
               std::vector<int> &uncompress_inds) {
@@ -155,7 +172,7 @@ calc_energy_with_derivatives(
   for (const auto &energy : energies) {
     const auto &[f, e_grad, e_hessian] = energy.derivatives_func(factory);
     combined_f += f;
-    grad += e_grad;
+    grad.head(e_grad.size()) += e_grad;
     triplets.insert(triplets.end(), e_hessian.begin(), e_hessian.end());
   }
   hessian.setFromTriplets(triplets.begin(), triplets.end());
@@ -248,6 +265,12 @@ Problem &Problem::optimize() {
       compress(_last_grad, _last_hessian, compress_inds, uncompress_inds);
     }
 
+    // Check if there's fixed variables.
+    if (!free_variables_indices.empty()) {
+      extract_free_varaibles(_last_grad, _last_hessian, remove_fixed_mapping,
+                             free_variables_indices);
+    }
+
     // Find direction.
     if (!_options.cache_pattern || (_options.cache_pattern && first_solve)) {
       analyze_pattern();
@@ -258,6 +281,10 @@ Problem &Problem::optimize() {
     if (_options.remove_unreferenced && !uncompress_inds.empty()) {
       d = uncompress(d, uncompress_inds, _cur.size());
       _last_grad = uncompress(_last_grad, uncompress_inds, _cur.size());
+    }
+    if (!free_variables_indices.empty()) {
+      d = uncompress(d, free_variables_indices, _cur.size());
+      _last_grad = uncompress(_last_grad, free_variables_indices, _cur.size());
     }
 
     // Find new value.
@@ -316,6 +343,45 @@ double Problem::calc_value(int i) {
 
 void Problem::set_end_iteration_callback(std::function<void()> callback) {
   _end_iteration_callback = callback;
+}
+
+void Problem::set_fixed_variarbles(const std::vector<int> &indices,
+                                   const std::vector<double> &vals) {
+  free_variables_indices.clear();
+  free_variables_indices.reserve(_cur.size() - indices.size());
+  // Marked fixed.
+  remove_fixed_mapping = std::vector<int>(_cur.size());
+  for (int i = 0; i < indices.size(); i++) {
+    remove_fixed_mapping[indices[i]] = -1;
+    if (!vals.empty()) {
+      _cur(indices[i]) = vals[i];
+    }
+  }
+  // Assign new indices.
+  int new_index = 0;
+  for (int i = 0; i < remove_fixed_mapping.size(); i++) {
+    if (remove_fixed_mapping[i] == -1)
+      continue;
+    free_variables_indices.push_back(i);
+    remove_fixed_mapping[i] = new_index++;
+  }
+}
+
+void Problem::set_fixed_rows(const std::vector<int> &rows_indices,
+                             const Eigen::MatrixXd &vals) {
+  if (vals.rows() == rows_indices.size() && vals.cols() == _cur_shape.second) {
+    Eigen::Map<Eigen::MatrixXd>(_cur.data(), _cur_shape.first,
+                                _cur_shape.second)(rows_indices, Eigen::all) =
+        vals;
+  }
+  std::vector<int> indices(rows_indices.size() * _cur_shape.second);
+  for (int j = 0; j < _cur_shape.second; j++) {
+    for (int i = 0; i < rows_indices.size(); i++) {
+      indices[j * rows_indices.size() + i] =
+          j * _cur_shape.first + rows_indices[i];
+    }
+  }
+  set_fixed_variarbles(indices);
 }
 
 Eigen::Map<Eigen::MatrixXd> Problem::x() {

@@ -1,7 +1,6 @@
-#include "Utils.h"
+#include "ElementFunc.h"
 
 #include <Eigen/Eigen>
-#include <fstream>
 
 namespace Optiz {
 
@@ -62,39 +61,6 @@ GenericEnergyFunc<double> val_func(int num, SparseEnergyFunc<double> delegate) {
     }
     return res;
   };
-}
-
-void write_matrix_to_file(const Eigen::MatrixXd &mat,
-                          const std::string &file_name) {
-  std::ofstream file(file_name);
-  file << mat;
-  file.close();
-}
-
-Eigen::MatrixXd read_matrix_from_file(const std::string &file_name) {
-  std::ifstream file(file_name);
-
-  int cols = 0;
-  std::string line;
-  std::vector<std::vector<double>> mat;
-  while (std::getline(file, line)) {
-    std::stringstream ss(line);
-    std::vector<double> row;
-    double val;
-    while (ss >> val) {
-      row.push_back(val);
-    }
-    mat.push_back(row);
-  }
-  Eigen::MatrixXd res(mat.size(), mat[0].size());
-  for (int i = 0; i < mat.size(); i++) {
-    for (int j = 0; j < mat[0].size(); j++) {
-      res(i, j) = mat[i][j];
-    }
-  }
-
-  file.close();
-  return res;
 }
 
 } // namespace Optiz

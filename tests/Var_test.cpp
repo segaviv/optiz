@@ -1,6 +1,6 @@
 #include <gtest/gtest.h>
 
-#include "Optiz/NewtonSolver/Var.h"
+#include "Optiz/Autodiff/Var.h"
 
 TEST(Var, constructor) {
   Optiz::Var x(5, 2);

@@ -1,5 +1,5 @@
-#include <iomanip> 
 #include "Var.h"
+#include <iomanip>
 
 #include "ProjectHessian.h"
 
@@ -12,11 +12,15 @@ Var::Var(double val) : _val(val) {}
 Var::Var(const double val, int index) : Var(val) { _grad.insert(index) = 1.0; }
 
 Var &Var::operator=(Var &&) = default;
+Var &Var::operator=(double val) {
+  _val = val;
+  return *this;
+}
 
 double Var::val() const { return _val; }
-SparseVector Var::grad() const { return _grad; }
+const SparseVector &Var::grad() const { return _grad; }
 Eigen::VectorXd Var::dense_grad() const { return _grad.to_dense(); }
-SelfAdjointMapMatrix Var::hessian() const { return _hessian; }
+const SelfAdjointMapMatrix &Var::hessian() const { return _hessian; }
 int Var::n_vars() const { return _grad.rows(); }
 
 Var::operator Var::Tup() const { return {_val, _grad.to_dense(), _hessian}; }
@@ -349,6 +353,24 @@ Var log(const Var &a) {
 }
 Var log(Var &&a) {
   a.chain_this(std::log(a._val), 1 / a._val, -1 / (a._val * a._val));
+  return a;
+}
+Var cos(const Var &a) {
+  double cosval = std::cos(a._val);
+  return a.chain(cosval, -std::sin(a._val), -cosval);
+}
+Var cos(Var &&a) {
+  double cosval = std::cos(a._val);
+  a.chain_this(cosval, -std::sin(a._val), -cosval);
+  return a;
+}
+Var sin(const Var &a) {
+  double sinval = std::sin(a._val);
+    return a.chain(sinval, std::cos(a._val), -sinval);
+}
+Var sin(Var &&a) {
+  double sinval = std::sin(a._val);
+  a.chain_this(sinval, std::cos(a._val), -sinval);
   return a;
 }
 Var atan(const Var &x) {

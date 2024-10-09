@@ -92,7 +92,7 @@ public:
                        double weight = 1);
 
   QuadraticTerm *add_weighted_equations(int num_elements,
-                                             const auto &handle_element_func) {
+                                        const auto &handle_element_func) {
     auto factory = [&](int i, int j = 0) {
       return LinearExpressionVariableD(i + variable_shape[0] * j);
     };
@@ -150,7 +150,7 @@ public:
                                             const MatType &d);
 
   QuadraticObjectiveD &add_hard_constraints(int num_elements,
-  const auto& handle_element_func) {
+                                            const auto &handle_element_func) {
     auto factory = [&](int i, int j = 0) {
       return LinearExpressionVariableD(i + variable_shape[0] * j);
     };
@@ -185,6 +185,7 @@ public:
 
   MatType solve();
   MatType solve(const MatType &b);
+  int rank() const;
 
   QuadraticTerm &get_quadratic_term(int index) {
     return *_quadratic_terms[index];
@@ -200,6 +201,7 @@ public:
   }
 
   double get_sqrd_error(const MatType &x) const;
+  SparseMatrix build_lhs_matrix() const;
 
 private:
   void update_known_values_rhs();
@@ -208,7 +210,7 @@ private:
   void update_cache();
   SparseMatrix known(const SparseMatrix &mat);
 
-  SparseMatrix unknown(const SparseMatrix &mat);
+  SparseMatrix unknown(const SparseMatrix &mat) const;
 
 private:
   int n;

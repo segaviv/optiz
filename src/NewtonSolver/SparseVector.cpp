@@ -21,6 +21,7 @@ Eigen::SparseVector<double> SparseVector::to_sparse() const {
 }
 
 double& SparseVector::operator()(long i) { return values[i]; }
+double SparseVector::operator()(long i) const { return values[i]; }
 
 double& SparseVector::insert(long i) { return values[i]; }
 

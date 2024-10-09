@@ -1,14 +1,8 @@
-#if __INTELLISENSE__
-#undef __ARM_NEON
-#undef __ARM_NEON__
-#endif
-
 #include "VarFactory.h"
 
 namespace Optiz {
   template class TVarFactory<Var>;
   template class VecValFactory<double>;
-  template class VecValFactory<Var>;
 
 
 VecVarFactory::VecVarFactory(const Eigen::VectorXd& init, 

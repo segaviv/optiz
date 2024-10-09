@@ -8,12 +8,13 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 set(OPTIZ_INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/include)
-file(GLOB SRC_FILES src/*.cpp src/NewtonSolver/*.cpp src/Linear/*.cpp)
+file(GLOB SRC_FILES src/*.cpp src/NewtonSolver/*.cpp src/Linear/*.cpp src/Common/*.cpp)
 add_library(${PROJECT_NAME} ${SRC_FILES})
 target_include_directories(
   ${PROJECT_NAME}
   PRIVATE ${OPTIZ_INCLUDE_DIR}/Optiz ${OPTIZ_INCLUDE_DIR}/Optiz/NewtonSolver
-          ${OPTIZ_INCLUDE_DIR}/Optiz/Linear)
+          ${OPTIZ_INCLUDE_DIR}/Optiz/Linear ${OPTIZ_INCLUDE_DIR}/Optiz/Autodiff
+          ${OPTIZ_INCLUDE_DIR}/Optiz/Common)
 
 # Search for OpenMP.
 find_package(OpenMP QUIET)

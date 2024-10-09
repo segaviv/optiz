@@ -1,6 +1,6 @@
 #pragma once
 #include "SparseVector.h"
-#include "VectorMap.h"
+#include "../Common/VectorMap.h"
 #include <Eigen/Eigen>
 #include <vector>
 
@@ -23,7 +23,7 @@ public:
                                   const SelfAdjointMapMatrix &var);
 
   double &operator()(long i, long j);
-  double &insert(long i, long j);
+  double operator()(long i, long j) const;
 
   SelfAdjointMapMatrix &operator=(const SelfAdjointMapMatrix &) = default;
   SelfAdjointMapMatrix &operator=(SelfAdjointMapMatrix &&);
@@ -59,12 +59,22 @@ public:
     return values.end();
   }
 
+  inline void for_each(const auto &func) const {
+    for (auto &val : values)
+      func(val);
+  }
+
+  inline void for_each(const auto &func) {
+    for (auto &val : values)
+      func(val);
+  }
+
   inline long n() const {
     if (_n >= 0)
       return _n;
     if (values.size() == 0)
       return 0;
-    
+
     return 1 + values.max(
                    [](auto &p) { return std::max(p.first.row, p.first.col); });
   }
