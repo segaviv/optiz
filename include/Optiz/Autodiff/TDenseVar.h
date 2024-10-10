@@ -191,9 +191,6 @@ public:
     const auto &sqrt_a = std::sqrt(a._val);
     return a.chain(sqrt_a, 0.5 / sqrt_a, -0.25 / (sqrt_a * a._val));
   }
-  friend TDenseVar sqr(const TDenseVar &a) {
-    return a.chain(a._val * a._val, 2 * a._val, 2);
-  }
   friend TDenseVar abs(const TDenseVar &a) {
     return a.chain(a._val, a._val >= 0 ? 1 : -1, 0);
   }
@@ -297,6 +294,11 @@ private:
   KVEC _grad = KVEC::Zero();
   KMAT _hessian = KMAT::Zero();
 };
+
+template<int k>
+TDenseVar<k> sqr(const TDenseVar<k> &a) {
+    return a.chain(a.val() * a.val(), 2 * a.val(), 2);
+  }
 
 } // namespace Optiz
 

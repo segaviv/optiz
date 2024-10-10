@@ -328,6 +328,20 @@ operator+(MetaVarBase<Derived1> const &derived1,
       *static_cast<const Derived2 *>(&derived2));
 }
 
+template <
+    typename Derived1, typename G,
+    typename = typename std::enable_if<std::is_arithmetic<G>::value, G>::type>
+decltype(auto) operator+(MetaVarBase<Derived1> const &derived1, G scalar) {
+  return derived1 + MetaVarScalar(scalar);
+}
+
+template <
+    typename Derived1, typename G,
+    typename = typename std::enable_if<std::is_arithmetic<G>::value, G>::type>
+decltype(auto) operator+(G scalar, MetaVarBase<Derived1> const &derived1) {
+  return MetaVarScalar(scalar) + derived1;
+}
+
 template <typename Derived1, typename Derived2>
 MetaVarSub<Derived1, Derived2>
 operator-(MetaVarBase<Derived1> const &derived1,
@@ -335,6 +349,20 @@ operator-(MetaVarBase<Derived1> const &derived1,
   return MetaVarSub<Derived1, Derived2>(
       *static_cast<const Derived1 *>(&derived1),
       *static_cast<const Derived2 *>(&derived2));
+}
+
+template <
+    typename Derived1, typename G,
+    typename = typename std::enable_if<std::is_arithmetic<G>::value, G>::type>
+decltype(auto) operator-(MetaVarBase<Derived1> const &derived1, G scalar) {
+  return derived1 - MetaVarScalar(scalar);
+}
+
+template <
+    typename Derived1, typename G,
+    typename = typename std::enable_if<std::is_arithmetic<G>::value, G>::type>
+decltype(auto) operator-(G scalar, MetaVarBase<Derived1> const &derived1) {
+  return MetaVarScalar(scalar) - derived1;
 }
 
 template <typename Derived1, typename Derived2>

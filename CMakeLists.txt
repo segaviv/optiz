@@ -8,7 +8,8 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 set(OPTIZ_INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/include)
-file(GLOB SRC_FILES src/*.cpp src/NewtonSolver/*.cpp src/Linear/*.cpp src/Common/*.cpp)
+file(GLOB SRC_FILES src/*.cpp src/NewtonSolver/*.cpp src/Linear/*.cpp
+     src/Common/*.cpp)
 add_library(${PROJECT_NAME} ${SRC_FILES})
 target_include_directories(
   ${PROJECT_NAME}
@@ -44,7 +45,11 @@ target_link_libraries(${PROJECT_NAME} PUBLIC Eigen3::Eigen)
 set_target_properties(${PROJECT_NAME} PROPERTIES INTERFACE_INCLUDE_DIRECTORIES
                                                  "${OPTIZ_INCLUDE_DIR}")
 
-# add_definitions(-Wfatal-errors )
+if(CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
+  # using Clang
+elseif(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+  add_definitions(-Wno-non-template-friend -Wno-psabi)
+endif()
 
 if(EMSCRIPTEN)
   target_compile_options(${PROJECT_NAME} PRIVATE -msimd128 -msse)
@@ -61,7 +66,10 @@ endif()
 
 if(APPLE)
   # SET(CMAKE_OSX_DEPLOYMENT_TARGET 14.0)
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Xclang -fopenmp ")
+  if(CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Xclang")
+  endif()
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fopenmp ")
 endif()
 
 # Testing
