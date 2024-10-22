@@ -254,6 +254,9 @@ public:
   template <typename State> void set_state(const State &state) {
     _state = std::make_shared<State>(state);
   }
+  template <typename State> const State& get_state() const {
+    return *static_cast<const State *>(_state.get());
+  }
   void set_end_iteration_callback(std::function<void()> callback);
   void set_fixed_variarbles(const std::vector<int> &indices,
                             const std::vector<double> &vals = {});
