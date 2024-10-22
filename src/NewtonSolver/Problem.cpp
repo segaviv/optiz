@@ -1,8 +1,8 @@
 #include <NewtonSolver/Problem.h>
 
+#include <Common/Utils.h>
 #include <chrono>
 #include <tuple>
-#include <Common/Utils.h>
 using namespace std::chrono;
 
 namespace Optiz {
@@ -239,10 +239,11 @@ Problem &Problem::optimize() {
   // Filter for constrained optimization.
   std::vector<std::pair<double, double>> filter;
   if (!constraints_energies.empty()) {
-    filter.push_back({calc_non_constraints_energy(
-                          energies, constraints_energies, val_factory(_cur)),
-                      calc_hard_constraints_energy(
-                          energies, constraints_energies, val_factory(_cur))});
+    filter.push_back(
+        {calc_non_constraints_energy(energies, constraints_energies,
+                                     val_factory(_cur, _state)),
+         calc_hard_constraints_energy(energies, constraints_energies,
+                                      val_factory(_cur, _state))});
   }
   int i = 0;
   std::vector<int> compress_inds, uncompress_inds;
@@ -256,7 +257,7 @@ Problem &Problem::optimize() {
     std::tie(_last_f, _last_grad, _last_hessian) =
         block_start_indices.empty()
             ? calc_energy_with_derivatives(energies,
-                                           VarFactory(_cur, _cur_shape))
+                                           VarFactory(_cur, _cur_shape, _state))
             : calc_energy_with_derivatives(
                   energies, VecVarFactory(_cur, block_start_indices));
     REPORT_CALC_TIME(_last_f, filter);
@@ -291,7 +292,7 @@ Problem &Problem::optimize() {
     double step_size, new_f, decrease;
     if (constraints_energies.empty()) {
       double dir_dot_grad = d.dot(_last_grad);
-      _cur = line_search(_cur, _last_f, d, dir_dot_grad, step_size, new_f);
+      std::tie(_cur, _state) = line_search(_cur, _last_f, d, dir_dot_grad, step_size, new_f);
       decrease = abs((new_f - _last_f)) / (abs(_last_f) + 1e-9);
     } else {
       auto [prev_f, prev_cf] = filter.back();
@@ -322,7 +323,7 @@ std::tuple<double, Eigen::VectorXd &, Eigen::SparseMatrix<double> &>
 Problem::calc_derivatives() {
   std::tie(_last_f, _last_grad, _last_hessian) =
       block_start_indices.empty()
-          ? calc_energy_with_derivatives(energies, VarFactory(_cur, _cur_shape))
+          ? calc_energy_with_derivatives(energies, VarFactory(_cur, _cur_shape, _state))
           : calc_energy_with_derivatives(
                 energies, VecVarFactory(_cur, block_start_indices));
   return {_last_f, _last_grad, _last_hessian};
@@ -396,28 +397,32 @@ bool Problem::armijo_cond(double f_curr, double f_x, double step_size,
   return f_x <= f_curr + armijo_const * step_size * dir_dot_grad;
 }
 
-ValFactory<double> Problem::val_factory(const Eigen::VectorXd &x) const {
-  return block_start_indices.empty()
-             ? ValFactory<double>(x, _cur_shape)
-             : VecValFactory<double>(x, block_start_indices);
+ValFactory<double>
+Problem::val_factory(const Eigen::VectorXd &x,
+                     const std::shared_ptr<void> &state) const {
+
+  return ValFactory<double>(x, _cur_shape, state);
+  // TODO: Add support for block variables.
+  // return block_start_indices.empty()
+  //  : VecValFactory<double>(x, block_start_indices);
 }
 
-Eigen::VectorXd Problem::line_search(const Eigen::VectorXd &cur, double f,
+std::tuple<Eigen::VectorXd, std::shared_ptr<void>> Problem::line_search(const Eigen::VectorXd &cur, double f,
                                      const Eigen::VectorXd &dir,
                                      double dir_dot_grad, double &step_size,
                                      double &new_f) {
   step_size = 1.0;
   for (int i = 0; i < _options.line_search_iterations; i++) {
-    Eigen::VectorXd x = cur + step_size * dir;
-    new_f = calc_energy(energies, val_factory(x));
+    auto [x, state] = _advance_func(cur, _state, dir, step_size);
+    new_f = calc_energy(energies, val_factory(x, state));
     if (!constraints_energies.empty() ||
         armijo_cond(f, new_f, step_size, dir_dot_grad, 1e-6)) {
-      return x;
+      return {x, state};
     }
     step_size *= _options.step_decrease_factor;
   }
   step_size = 0.0;
-  return _cur;
+  return {_cur, _state};
 }
 
 Eigen::VectorXd Problem::line_search_constrained(
@@ -427,8 +432,8 @@ Eigen::VectorXd Problem::line_search_constrained(
   step_size = 1.0;
   double gt = _options.gamma_theta;
   for (int i = 0; i < _options.line_search_iterations; i++) {
-    Eigen::VectorXd x = cur + step_size * dir;
-    auto x_factory = val_factory(x);
+    auto [x, state] = _advance_func(cur, _state, dir, step_size);
+    auto x_factory = val_factory(x, state);
     // Calculate new_f and new_cf.
     new_f =
         calc_non_constraints_energy(energies, constraints_energies, x_factory);

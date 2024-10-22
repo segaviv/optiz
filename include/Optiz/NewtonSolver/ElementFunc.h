@@ -5,6 +5,7 @@
 
 #include <Eigen/Eigen>
 #include <vector>
+#include <memory>
 
 #include "../Autodiff/MetaVar.h"
 #include "../Autodiff/TDenseVar.h"
@@ -39,8 +40,9 @@ GenericEnergyFunc<double> val_func(int num, SparseEnergyFunc<double> delegate);
 
 template <int k> class LocalVarFactory {
 public:
-  LocalVarFactory(const Eigen::Map<const Eigen::MatrixXd> &other)
-      : cur(other) {}
+  LocalVarFactory(const Eigen::Map<const Eigen::MatrixXd> &other,
+                  const std::shared_ptr<void> &state = nullptr)
+      : cur(other), state(state) {}
 
   using Scalar = TDenseVar<k>;
 
@@ -87,7 +89,12 @@ public:
     return result;
   }
 
+  template <typename State> const State &get_state() const {
+    return *static_cast<const State *>(state.get());
+  }
+
   Eigen::Map<const Eigen::MatrixXd> cur;
+  std::shared_ptr<void> state;
   int local_to_global[k];
   int num_referenced = 0;
 };
@@ -110,7 +117,7 @@ EnergyFunc element_func(int num, LocalEnergyFunction<k> delegate,
 #pragma omp parallel for schedule(static) reduction(+ : f)                     \
     reduction(merge : triplets) num_threads(omp_get_max_threads() - 1)
     for (int i = 0; i < num; i++) {
-      LocalVarFactory<k> local_vars(vars.current_mat());
+      LocalVarFactory<k> local_vars(vars.current_mat(), vars.get_state());
       TDenseVar<k> res = delegate(i, local_vars);
       if (project_hessian) {
         res.projectHessian();
@@ -171,8 +178,9 @@ consteval auto next_meta_var_id() {
 class LocalMetaVarFactory {
 public:
   template <auto ind = int{}, typename = decltype([] {})>
-  LocalMetaVarFactory(const Eigen::Map<const Eigen::MatrixXd> &other)
-      : cur(other) {}
+  LocalMetaVarFactory(const Eigen::Map<const Eigen::MatrixXd> &other,
+                      const std::shared_ptr<void> &state = nullptr)
+      : cur(other), state(state) {}
 
   int num_vars() const { return cur.size(); }
 
@@ -200,7 +208,12 @@ public:
     }
   }
 
+  template <typename State> const State &get_state() const {
+    return *static_cast<const State *>(state.get());
+  }
+
   Eigen::Map<const Eigen::MatrixXd> cur;
+  std::shared_ptr<void> state;
   int local_to_global[20];
   int num_referenced = 0;
 };
@@ -216,7 +229,7 @@ EnergyFunc meta_element_func(int num, auto delegate, bool hessian_proj = true) {
 #pragma omp parallel for schedule(static) reduction(+ : f)                     \
     reduction(merge : triplets) num_threads(omp_get_max_threads() - 1)
     for (int i = 0; i < num; i++) {
-      LocalMetaVarFactory local_vars(vars.current_mat());
+      LocalMetaVarFactory local_vars(vars.current_mat(), vars.get_state());
       auto res = delegate(i, local_vars);
       f += res.val();
       // Grad.
@@ -253,7 +266,9 @@ EnergyFunc meta_element_func(int num, auto delegate, bool hessian_proj = true) {
 class MetaValFactory {
 public:
   template <auto ind = int{}, typename = decltype([] {})>
-  MetaValFactory(const Eigen::Map<const Eigen::MatrixXd> &other) : cur(other) {}
+  MetaValFactory(const Eigen::Map<const Eigen::MatrixXd> &other,
+                 const std::shared_ptr<void> &state = nullptr)
+      : cur(other), state(state) {}
 
   int num_vars() const { return cur.size(); }
 
@@ -272,13 +287,18 @@ public:
     }
   }
 
+  template <typename State> const State &get_state() const {
+    return *static_cast<const State *>(state.get());
+  }
+
   Eigen::Map<const Eigen::MatrixXd> cur;
+  std::shared_ptr<void> state;
 };
 
 GenericEnergyFunc<double> meta_val_func(int num, auto delegate) {
   return [num, delegate](const TGenericVariableFactory<double> &vars) {
     double res = 0.0;
-    MetaValFactory fac(vars.current_mat());
+    MetaValFactory fac(vars.current_mat(), vars.get_state());
 // Aggregate the values.
 #pragma omp parallel for schedule(static) reduction(+ : res)
     for (int i = 0; i < num; i++) {

@@ -1,5 +1,6 @@
 #pragma once
 #include <Eigen/Eigen>
+#include <memory>
 #include <vector>
 
 #include "Common.h"
@@ -65,6 +66,10 @@ template <typename EnergyProvider> struct Energy {
 
 class Problem {
 public:
+  using AdvanceFunc =
+      std::function<std::tuple<Eigen::VectorXd, std::shared_ptr<void>>(
+          const Eigen::VectorXd &x, const std::shared_ptr<void> &state,
+          const Eigen::VectorXd &d, double step_size)>;
   using ValueEnergyFunc = std::function<double(const ValFactory<double> &)>;
   struct Options {
     // Whether to cache the hessian pattern.
@@ -160,10 +165,12 @@ public:
   }
 
   template <typename EnergyProvider>
-  Problem &add_meta_element_energy(int num_elements, const EnergyProvider &energy,
-                              bool project_hessian = true) {
+  Problem &add_meta_element_energy(int num_elements,
+                                   const EnergyProvider &energy,
+                                   bool project_hessian = true) {
     energies.push_back(InternalEnergy{
-        .derivatives_func = meta_element_func(num_elements, energy, project_hessian),
+        .derivatives_func =
+            meta_element_func(num_elements, energy, project_hessian),
         .value_func = meta_val_func(num_elements, energy)});
     return *this;
   }
@@ -241,6 +248,12 @@ public:
                                 project_hessian);
   }
 
+  template <typename Func> void set_advance_func(const Func &func) {
+    _advance_func = func;
+  }
+  template <typename State> void set_state(const State &state) {
+    _state = std::make_shared<State>(state);
+  }
   void set_end_iteration_callback(std::function<void()> callback);
   void set_fixed_variarbles(const std::vector<int> &indices,
                             const std::vector<double> &vals = {});
@@ -258,15 +271,16 @@ private:
   bool armijo_cond(double f_curr, double f_x, double step_size,
                    double dir_dot_grad, double armijo_const);
 
-  Eigen::VectorXd line_search(const Eigen::VectorXd &cur, double f,
-                              const Eigen::VectorXd &dir, double dir_dot_grad,
-                              double &step_size, double &new_f);
+  std::tuple<Eigen::VectorXd, std::shared_ptr<void>>
+  line_search(const Eigen::VectorXd &cur, double f, const Eigen::VectorXd &dir,
+              double dir_dot_grad, double &step_size, double &new_f);
 
   Eigen::VectorXd line_search_constrained(
       const Eigen::VectorXd &cur, const Eigen::VectorXd &dir, double &step_size,
       double &new_f, std::vector<std::pair<double, double>> &filter);
 
-  ValFactory<double> val_factory(const Eigen::VectorXd &x) const;
+  ValFactory<double> val_factory(const Eigen::VectorXd &x,
+                                 const std::shared_ptr<void> &state) const;
 
   void analyze_pattern();
 
@@ -275,7 +289,11 @@ private:
 private:
   Options _options;
   bool first_solve;
+  // The current variables values.
   Eigen::VectorXd _cur;
+  // User provided state required for the energy calculation.
+  std::shared_ptr<void> _state = nullptr;
+
   std::pair<int, int> _cur_shape;
   std::vector<int> block_start_indices;
 
@@ -283,6 +301,13 @@ private:
   std::vector<int> free_variables_indices;
   // Contains -1 for fixed, new index for free.
   std::vector<int> remove_fixed_mapping;
+
+  // Function to advance the variables (x + step_size * d by default).
+  AdvanceFunc _advance_func =
+      [this](const Eigen::VectorXd &x, const std::shared_ptr<void> &state,
+             const Eigen::VectorXd &d, double step_size) {
+        return std::make_tuple(x + step_size * d, state);
+      };
 
   std::function<void()> _end_iteration_callback = []() {};
 
