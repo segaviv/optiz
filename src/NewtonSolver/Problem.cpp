@@ -421,7 +421,11 @@ Problem::line_search(const Eigen::VectorXd &cur, double f,
   step_size = 1.0;
   for (int i = 0; i < _options.line_search_iterations; i++) {
     auto [x, state] = _advance_func(cur, _state, dir, step_size);
-    new_f = calc_energy(energies, VAL_FACTORY(x, state));
+    new_f =
+        block_start_indices.empty()
+            ? calc_energy(energies, ValFactory<double>(x, _cur_shape, state))
+            : calc_energy(energies,
+                          VecValFactory(x, block_start_indices, block_shapes));
     if (!constraints_energies.empty() ||
         armijo_cond(f, new_f, step_size, dir_dot_grad, 1e-6)) {
       return {x, state};
