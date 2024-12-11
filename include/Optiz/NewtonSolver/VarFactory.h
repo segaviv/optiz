@@ -41,28 +41,44 @@ public:
     return *static_cast<const State *>(state.get());
   }
 
+  // Overridden in case of more than one variables block.
+  virtual const TGenericVariableFactory &var_block(int index) const { return *this; }
+
 protected:
   const Eigen::VectorXd &_current;
   std::pair<int, int> shape;
   std::shared_ptr<void> state;
 };
 
+class VarFactoryWithOffset : public TGenericVariableFactory<Var> {
+public:
+  VarFactoryWithOffset(const Eigen::VectorXd &init,
+                       const std::pair<int, int> &shape, int offset,
+                       const std::shared_ptr<void> &state = nullptr);
+  Var operator()(int i) const;
+  Var operator()(int i, int j) const;
+
+protected:
+  int offset;
+};
+
 class VecVarFactory : public TGenericVariableFactory<Var> {
 public:
   VecVarFactory(const Eigen::VectorXd &init,
-                const std::vector<int> &block_start_indices);
+                const std::vector<int> &block_start_indices,
+                const std::vector<std::pair<int, int>> &block_shapes);
 
   Var operator()(int i) const;
-
   Var operator()(int i, int j) const;
+  const TGenericVariableFactory &var_block(int index) const;
 
 private:
-  const std::vector<int> &block_start_indices;
+  std::vector<VarFactoryWithOffset> var_factories;
 };
 
 template <typename T> class TVarFactory : public TGenericVariableFactory<T> {
 public:
-  TVarFactory(const Eigen::VectorXd &init, const std::pair<int, int> &shape, 
+  TVarFactory(const Eigen::VectorXd &init, const std::pair<int, int> &shape,
               const std::shared_ptr<void> &state = nullptr)
       : TGenericVariableFactory<T>(init, shape, state) {}
   T operator()(int i) const { return T(this->_current(i), i); }
@@ -74,7 +90,7 @@ public:
 
 template <typename T> class ValFactory : public TGenericVariableFactory<T> {
 public:
-  ValFactory(const Eigen::VectorXd &init, const std::pair<int, int> &shape, 
+  ValFactory(const Eigen::VectorXd &init, const std::pair<int, int> &shape,
              const std::shared_ptr<void> &state = nullptr)
       : TGenericVariableFactory<T>(init, shape, state) {}
 
@@ -86,23 +102,34 @@ public:
   }
 };
 
-template <typename T> class VecValFactory : public ValFactory<T> {
+class ValFactoryWithOffset : public TGenericVariableFactory<double> {
 public:
-  VecValFactory(const Eigen::VectorXd &init,
-                const std::vector<int> &block_start_indices)
-      : ValFactory<T>(init, {0, 0}), block_start_indices(block_start_indices) {}
+  ValFactoryWithOffset(const Eigen::VectorXd &init,
+                       const std::pair<int, int> &shape, int offset,
+                       const std::shared_ptr<void> &state = nullptr);
 
-  T operator()(int i, int j) const {
-    return this->_current(block_start_indices[i] + j);
-  }
+  double operator()(int i) const;
+  double operator()(int i, int j) const;
 
 private:
-  const std::vector<int> &block_start_indices;
+  int offset;
+};
+
+class VecValFactory : public ValFactory<double> {
+public:
+  VecValFactory(const Eigen::VectorXd &init,
+                const std::vector<int> &block_start_indices,
+                const std::vector<std::pair<int, int>> &block_shapes);
+
+  double operator()(int i) const;
+  double operator()(int i, int j) const;
+  const TGenericVariableFactory &var_block(int index) const;
+
+private:
+  std::vector<ValFactoryWithOffset> val_factories;
 };
 
 using VarFactory = TVarFactory<Var>;
 extern template class TVarFactory<Var>;
-extern template class VecValFactory<double>;
-extern template class VecValFactory<Var>;
 
 } // namespace Optiz

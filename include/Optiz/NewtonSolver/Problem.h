@@ -121,8 +121,8 @@ public:
 
   Problem(const Eigen::MatrixXd &init);
   Problem(const Eigen::MatrixXd &init, const Options &options);
-  Problem(const std::vector<Eigen::VectorXd> &init);
-  Problem(const std::vector<Eigen::VectorXd> &init, const Options &options);
+  Problem(const std::vector<Eigen::MatrixXd> &init);
+  Problem(const std::vector<Eigen::MatrixXd> &init, const Options &options);
 
   Problem &optimize();
 
@@ -265,6 +265,7 @@ public:
                       const Eigen::MatrixXd &vals = Eigen::MatrixXd());
 
   Eigen::Map<Eigen::MatrixXd> x();
+  Eigen::Map<Eigen::MatrixXd> x(int index);
   inline double last_f() { return _last_f; }
   inline Eigen::VectorXd &last_grad() { return _last_grad; }
   inline Eigen::SparseMatrix<double> &last_hessian() { return _last_hessian; }
@@ -282,9 +283,6 @@ private:
       const Eigen::VectorXd &cur, const Eigen::VectorXd &dir, double &step_size,
       double &new_f, std::vector<std::pair<double, double>> &filter);
 
-  ValFactory<double> val_factory(const Eigen::VectorXd &x,
-                                 const std::shared_ptr<void> &state) const;
-
   void analyze_pattern();
 
   Eigen::VectorXd factorize_and_solve();
@@ -298,6 +296,7 @@ private:
   std::shared_ptr<void> _state = nullptr;
 
   std::pair<int, int> _cur_shape;
+  std::vector<std::pair<int, int>> block_shapes;
   std::vector<int> block_start_indices;
 
   // The indices of the free variables.

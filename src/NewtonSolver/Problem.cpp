@@ -7,6 +7,11 @@ using namespace std::chrono;
 
 namespace Optiz {
 
+#define VAL_FACTORY(x, state)                                                  \
+  block_start_indices.empty()                                                  \
+      ? ValFactory<double>(x, _cur_shape, state)                               \
+      : VecValFactory(x, block_start_indices, block_shapes)
+
 #define REPORT_ITER_START(i)                                                   \
   time_point<high_resolution_clock> start, stop, stop2, stop3;                 \
   if (_options.report_level == Options::EVERY_STEP) {                          \
@@ -79,9 +84,9 @@ Problem::Problem(const Eigen::MatrixXd &init, const Problem::Options &options)
       _cur(Eigen::Map<const Eigen::VectorXd>(init.data(), init.size())),
       _cur_shape({init.rows(), init.cols()}) {}
 
-Problem::Problem(const std::vector<Eigen::VectorXd> &init)
+Problem::Problem(const std::vector<Eigen::MatrixXd> &init)
     : Problem(init, {}) {}
-Problem::Problem(const std::vector<Eigen::VectorXd> &init,
+Problem::Problem(const std::vector<Eigen::MatrixXd> &init,
                  const Options &options)
     : _options(options), first_solve(true) {
   int total_size = 0;
@@ -91,12 +96,14 @@ Problem::Problem(const std::vector<Eigen::VectorXd> &init,
   _cur.resize(total_size, 1);
   // Calculate the start index for each of the blocks.
   block_start_indices.resize(init.size());
+  block_shapes.resize(init.size());
   int block_start_index = 0;
   for (int i = 0; i < init.size(); i++) {
     // Store the start index.
     block_start_indices[i] = block_start_index;
+    block_shapes[i] = {init[i].rows(), init[i].cols()};
     // And copy the block to the vector.
-    _cur.block(block_start_index, 0, init[i].size(), 1) = init[i];
+    _cur.block(block_start_index, 0, init[i].size(), 1) = init[i].reshaped();
     block_start_index += init[i].size();
   }
 }
@@ -241,9 +248,9 @@ Problem &Problem::optimize() {
   if (!constraints_energies.empty()) {
     filter.push_back(
         {calc_non_constraints_energy(energies, constraints_energies,
-                                     val_factory(_cur, _state)),
+                                     VAL_FACTORY(_cur, _state)),
          calc_hard_constraints_energy(energies, constraints_energies,
-                                      val_factory(_cur, _state))});
+                                      VAL_FACTORY(_cur, _state))});
   }
   int i = 0;
   std::vector<int> compress_inds, uncompress_inds;
@@ -259,7 +266,8 @@ Problem &Problem::optimize() {
             ? calc_energy_with_derivatives(energies,
                                            VarFactory(_cur, _cur_shape, _state))
             : calc_energy_with_derivatives(
-                  energies, VecVarFactory(_cur, block_start_indices));
+                  energies,
+                  VecVarFactory(_cur, block_start_indices, block_shapes));
     REPORT_CALC_TIME(_last_f, filter);
     // If remove unreferenced is true, adjust the gradient and hessian.
     if (_options.remove_unreferenced) {
@@ -292,7 +300,8 @@ Problem &Problem::optimize() {
     double step_size, new_f, decrease;
     if (constraints_energies.empty()) {
       double dir_dot_grad = d.dot(_last_grad);
-      std::tie(_cur, _state) = line_search(_cur, _last_f, d, dir_dot_grad, step_size, new_f);
+      std::tie(_cur, _state) =
+          line_search(_cur, _last_f, d, dir_dot_grad, step_size, new_f);
       decrease = abs((new_f - _last_f)) / (abs(_last_f) + 1e-9);
     } else {
       auto [prev_f, prev_cf] = filter.back();
@@ -323,9 +332,11 @@ std::tuple<double, Eigen::VectorXd &, Eigen::SparseMatrix<double> &>
 Problem::calc_derivatives() {
   std::tie(_last_f, _last_grad, _last_hessian) =
       block_start_indices.empty()
-          ? calc_energy_with_derivatives(energies, VarFactory(_cur, _cur_shape, _state))
+          ? calc_energy_with_derivatives(energies,
+                                         VarFactory(_cur, _cur_shape, _state))
           : calc_energy_with_derivatives(
-                energies, VecVarFactory(_cur, block_start_indices));
+                energies,
+                VecVarFactory(_cur, block_start_indices, block_shapes));
   return {_last_f, _last_grad, _last_hessian};
 }
 
@@ -334,12 +345,12 @@ double Problem::calc_value(int i) {
     return block_start_indices.empty()
                ? energies[i].value_func(ValFactory<double>(_cur, _cur_shape))
                : energies[i].value_func(
-                     VecValFactory<double>(_cur, block_start_indices));
+                     VecValFactory(_cur, block_start_indices, block_shapes));
   }
   return block_start_indices.empty()
              ? calc_energy(energies, ValFactory<double>(_cur, _cur_shape))
-             : calc_energy(energies,
-                           VecValFactory<double>(_cur, block_start_indices));
+             : calc_energy(energies, VecValFactory(_cur, block_start_indices,
+                                                   block_shapes));
 }
 
 void Problem::set_end_iteration_callback(std::function<void()> callback) {
@@ -390,6 +401,12 @@ Eigen::Map<Eigen::MatrixXd> Problem::x() {
                                      _cur_shape.second);
 }
 
+Eigen::Map<Eigen::MatrixXd> Problem::x(int index) {
+  return Eigen::Map<Eigen::MatrixXd>(_cur.data() + block_start_indices[index],
+                                     block_shapes[index].first,
+                                     block_shapes[index].second);
+}
+
 Problem::Options &Problem::options() { return _options; }
 
 bool Problem::armijo_cond(double f_curr, double f_x, double step_size,
@@ -397,24 +414,14 @@ bool Problem::armijo_cond(double f_curr, double f_x, double step_size,
   return f_x <= f_curr + armijo_const * step_size * dir_dot_grad;
 }
 
-ValFactory<double>
-Problem::val_factory(const Eigen::VectorXd &x,
-                     const std::shared_ptr<void> &state) const {
-
-  return ValFactory<double>(x, _cur_shape, state);
-  // TODO: Add support for block variables.
-  // return block_start_indices.empty()
-  //  : VecValFactory<double>(x, block_start_indices);
-}
-
-std::tuple<Eigen::VectorXd, std::shared_ptr<void>> Problem::line_search(const Eigen::VectorXd &cur, double f,
-                                     const Eigen::VectorXd &dir,
-                                     double dir_dot_grad, double &step_size,
-                                     double &new_f) {
+std::tuple<Eigen::VectorXd, std::shared_ptr<void>>
+Problem::line_search(const Eigen::VectorXd &cur, double f,
+                     const Eigen::VectorXd &dir, double dir_dot_grad,
+                     double &step_size, double &new_f) {
   step_size = 1.0;
   for (int i = 0; i < _options.line_search_iterations; i++) {
     auto [x, state] = _advance_func(cur, _state, dir, step_size);
-    new_f = calc_energy(energies, val_factory(x, state));
+    new_f = calc_energy(energies, VAL_FACTORY(x, state));
     if (!constraints_energies.empty() ||
         armijo_cond(f, new_f, step_size, dir_dot_grad, 1e-6)) {
       return {x, state};
@@ -433,7 +440,7 @@ Eigen::VectorXd Problem::line_search_constrained(
   double gt = _options.gamma_theta;
   for (int i = 0; i < _options.line_search_iterations; i++) {
     auto [x, state] = _advance_func(cur, _state, dir, step_size);
-    auto x_factory = val_factory(x, state);
+    auto x_factory = VAL_FACTORY(x, state);
     // Calculate new_f and new_cf.
     new_f =
         calc_non_constraints_energy(energies, constraints_energies, x_factory);

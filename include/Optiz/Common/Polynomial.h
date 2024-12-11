@@ -21,8 +21,8 @@ struct Polynomial {
 
   Polynomial() {}
 
-  Polynomial(const Eigen::MatrixXd &coefs) : coefs(coefs) {}
-  Polynomial(double x) { coefs = Eigen::Matrix<double, 1, 1>::Constant(x); }
+  explicit Polynomial(const Eigen::MatrixXd &coefs) : coefs(coefs) {}
+  explicit Polynomial(double x) { coefs = Eigen::Matrix<double, 1, 1>::Constant(x); }
 
   Polynomial pow(int n);
 
