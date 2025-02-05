@@ -106,6 +106,7 @@ Problem::Problem(const std::vector<Eigen::MatrixXd> &init,
     _cur.block(block_start_index, 0, init[i].size(), 1) = init[i].reshaped();
     block_start_index += init[i].size();
   }
+  _cur_shape = {total_size, 1};
 }
 
 void extract_free_varaibles(Eigen::VectorXd &grad,

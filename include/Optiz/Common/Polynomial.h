@@ -22,7 +22,9 @@ struct Polynomial {
   Polynomial() {}
 
   explicit Polynomial(const Eigen::MatrixXd &coefs) : coefs(coefs) {}
-  explicit Polynomial(double x) { coefs = Eigen::Matrix<double, 1, 1>::Constant(x); }
+  explicit Polynomial(double x) {
+    coefs = Eigen::Matrix<double, 1, 1>::Constant(x);
+  }
 
   Polynomial pow(int n);
 
@@ -40,8 +42,38 @@ struct Polynomial {
 };
 std::ostream &operator<<(std::ostream &s, const Polynomial &p);
 Polynomial operator*(const Polynomial &p1, const Polynomial &p2);
+template <typename T, typename = typename std::enable_if<
+                          std::is_arithmetic<T>::value, T>::type>
+inline Polynomial operator*(const Polynomial &p1, const T &scalar) {
+  return p1 * Polynomial(scalar);
+}
+template <typename T, typename = typename std::enable_if<
+                          std::is_arithmetic<T>::value, T>::type>
+inline Polynomial operator*(const T &scalar, const Polynomial &p1) {
+  return Polynomial(scalar) * p1;
+}
 Polynomial operator*(const Polynomial &p1, const Eigen::VectorXd &p2);
 Polynomial operator+(const Polynomial &p1, const Polynomial &p2);
+template <typename T, typename = typename std::enable_if<
+                          std::is_arithmetic<T>::value, T>::type>
+inline Polynomial operator+(const Polynomial &p1, const T &scalar) {
+  return p1 + Polynomial(scalar);
+}
+template <typename T, typename = typename std::enable_if<
+                          std::is_arithmetic<T>::value, T>::type>
+inline Polynomial operator+(const T &scalar, const Polynomial &p1) {
+  return Polynomial(scalar) + p1;
+}
 Polynomial operator-(const Polynomial &p1, const Polynomial &p2);
+template <typename T, typename = typename std::enable_if<
+                          std::is_arithmetic<T>::value, T>::type>
+inline Polynomial operator-(const Polynomial &p1, const T &scalar) {
+  return p1 - Polynomial(scalar);
+}
+template <typename T, typename = typename std::enable_if<
+                          std::is_arithmetic<T>::value, T>::type>
+inline Polynomial operator-(const T &scalar, const Polynomial &p1) {
+  return Polynomial(scalar) - p1;
+}
 Polynomial pow(const Polynomial &p, int n);
 } // namespace Optiz
