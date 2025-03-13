@@ -1,9 +1,9 @@
 #pragma once
 #include <Eigen/Eigen>
 #include <memory>
+#include <type_traits>
 #include <vector>
 
-#include "Common.h"
 #include "ElementFunc.h"
 #include "VarFactory.h"
 
@@ -121,6 +121,27 @@ public:
 
   Problem(const Eigen::MatrixXd &init);
   Problem(const Eigen::MatrixXd &init, const Options &options);
+  template <typename... Args> Problem(Args... arg) {
+    int total_size = 0;
+    ([&] { total_size += arg.size(); }(), ...);
+    _cur.resize(total_size, 1);
+    // Calculate the start index for each of the blocks.
+    block_start_indices.resize(sizeof...(arg));
+    block_shapes.resize(sizeof...(arg));
+    int block_start_index = 0;
+    int i = 0;
+    (
+        [&] {
+          block_start_indices[i] = block_start_index;
+          block_shapes[i] = {arg.rows(), arg.cols()};
+          // And copy the block to the vector.
+          _cur.block(block_start_index, 0, arg.size(), 1) = arg.reshaped();
+          block_start_index += arg.size();
+          i++;
+        }(),
+        ...);
+    _cur_shape = {total_size, 1};
+  }
   Problem(const std::vector<Eigen::MatrixXd> &init);
   Problem(const std::vector<Eigen::MatrixXd> &init, const Options &options);
 
@@ -254,7 +275,7 @@ public:
   template <typename State> void set_state(const State &state) {
     _state = std::make_shared<State>(state);
   }
-  template <typename State> const State& get_state() const {
+  template <typename State> const State &get_state() const {
     return *static_cast<const State *>(_state.get());
   }
   void set_end_iteration_callback(std::function<void()> callback);
@@ -289,7 +310,7 @@ private:
 
 private:
   Options _options;
-  bool first_solve;
+  bool first_solve = true;
   // The current variables values.
   Eigen::VectorXd _cur;
   // User provided state required for the energy calculation.
