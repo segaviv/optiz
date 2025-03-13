@@ -33,7 +33,8 @@ static std::tuple<Eigen::MatrixX<double>, std::vector<int>>
 sparse_to_dense(const SelfAdjointMapMatrix &mat) {
   auto [sp_to_dense, dense_to_sp] = find_referenced_indices(mat);
 
-  Eigen::MatrixX<double> res(sp_to_dense.size(), sp_to_dense.size());
+  Eigen::MatrixX<double> res =
+      Eigen::MatrixX<double>::Zero(sp_to_dense.size(), sp_to_dense.size());
   for (const auto &val : mat.get_values()) {
     int row = val.first.row, col = val.first.col;
     int r = sp_to_dense[row], c = sp_to_dense[col];
