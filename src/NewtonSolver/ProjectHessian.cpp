@@ -74,7 +74,7 @@ project_sparse_hessian(const SelfAdjointMapMatrix &hessian) {
   return {dense, dense_to_sp};
 }
 
-template void project_hessian(Eigen::Matrix<double, -1, -1> &hessian,
-                              double epsilon);
+// template void project_hessian(Eigen::Matrix<double, -1, -1> &hessian,
+//                               double epsilon);
 
 } // namespace Optiz

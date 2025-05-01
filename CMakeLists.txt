@@ -17,13 +17,24 @@ target_include_directories(
           ${OPTIZ_INCLUDE_DIR}/Optiz/Linear ${OPTIZ_INCLUDE_DIR}/Optiz/Autodiff
           ${OPTIZ_INCLUDE_DIR}/Optiz/Common)
 
-# Search for OpenMP.
-find_package(OpenMP QUIET)
-if(TARGET OpenMP::OpenMP_CXX)
-  target_link_libraries(${PROJECT_NAME} PRIVATE OpenMP::OpenMP_CXX)
-else()
-  message(WARNING "OpenMP not found, building without it.")
+# Search for TBB
+set(TBB_TEST OFF)
+set(TBB_OUTPUT_DIR ${CMAKE_BINARY_DIR})
+set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
+find_package(TBB QUIET)
+if(NOT TBB_FOUND)
+  # TBB not found, fetch it from GitHub
+  FetchContent_Declare(
+    TBB
+    GIT_REPOSITORY https://github.com/uxlfoundation/oneTBB.git
+    GIT_TAG v2022.1.0
+  )
+  FetchContent_MakeAvailable(TBB)
+  set(TBB_FOUND TRUE)
 endif()
+
+target_link_libraries(${PROJECT_NAME} PRIVATE TBB::tbb)
 
 # Search for Eigen.
 find_package(Eigen3 QUIET)
@@ -69,10 +80,13 @@ if(APPLE)
   if(CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Xclang")
   endif()
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fopenmp ")
 endif()
 
 # Testing
 if(PROJECT_IS_TOP_LEVEL)
   include(testing)
 endif()
+
+
+add_executable(test_optiz main.cpp)
+target_link_libraries(test_optiz PRIVATE Optiz TBB::tbb)

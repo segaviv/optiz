@@ -1,7 +1,10 @@
 #pragma once
-#ifdef _OPENMP
-#include <omp.h>
-#endif
+#include <tbb/tbb.h>
+#include <tbb/parallel_for.h>
+#include <tbb/parallel_reduce.h>
+#include <tbb/blocked_range.h>
+#include <atomic>
+#include <tbb/concurrent_vector.h>
 
 #include <Eigen/Eigen>
 #include <vector>
@@ -11,10 +14,6 @@
 #include "../Autodiff/TDenseVar.h"
 #include "../Autodiff/Var.h"
 #include "VarFactory.h"
-
-#pragma omp declare reduction(                                                 \
-        merge : std::vector<Eigen::Triplet<double>> : omp_out.insert(          \
-                omp_out.end(), omp_in.begin(), omp_in.end()))
 
 namespace Optiz {
 
@@ -109,47 +108,54 @@ EnergyFunc element_func(int num, LocalEnergyFunction<k> delegate,
   return [num, delegate, project_hessian](
              const TGenericVariableFactory<Var> &vars) -> ValueAndDerivatives {
     int num_vars = vars.num_vars();
-    double f = 0.0;
-    Eigen::VectorXd grad = Eigen::VectorXd::Zero(num_vars);
-    std::vector<Eigen::Triplet<double>> triplets;
+    std::atomic<double> f = 0.0;
+    tbb::concurrent_vector<double> grad_vec(num_vars, 0.0);
+    tbb::concurrent_vector<Eigen::Triplet<double>> triplets;
     triplets.reserve(k * k * num);
-// Aggregate the values.
-#pragma omp parallel for schedule(static) reduction(+ : f)                     \
-    reduction(merge : triplets) num_threads(omp_get_max_threads() - 1)
-    for (int i = 0; i < num; i++) {
-      LocalVarFactory<k> local_vars(vars.current_mat(), vars.get_state());
-      TDenseVar<k> res = delegate(i, local_vars);
-      if (project_hessian) {
-        res.projectHessian();
-      }
 
-      // Aggregate the result.
-      auto &local_grad = res.grad();
-      auto &local_hessian = res.hessian();
-      // Value.
-      f += res.val();
+    tbb::parallel_for(tbb::blocked_range<int>(0, num),
+      [&](const tbb::blocked_range<int>& r) {
+        for (int i = r.begin(); i < r.end(); ++i) {
+          LocalVarFactory<k> local_vars(vars.current_mat(), vars.get_state());
+          TDenseVar<k> res = delegate(i, local_vars);
+          if (project_hessian) {
+            res.projectHessian();
+          }
 
-      // Grad.
-      for (int j = 0; j < local_vars.num_referenced; j++) {
-#pragma omp atomic
-        grad(local_vars.local_to_global[j]) += local_grad(j);
-      }
-      // Hessian.
-      for (int j = 0; j < local_vars.num_referenced; j++) {
-        for (int h = 0; h <= j; h++) {
-          int gj = local_vars.local_to_global[j],
-              gh = local_vars.local_to_global[h];
-          double val = local_hessian(j, h);
-          // Only fill the lower triangle of the hessian.
-          if (gj <= gh) {
-            triplets.emplace_back(gh, gj, val);
-          } else {
-            triplets.emplace_back(gj, gh, val);
+          // Aggregate the result.
+          auto &local_grad = res.grad();
+          auto &local_hessian = res.hessian();
+          // Value.
+          f.fetch_add(res.val(), std::memory_order_relaxed);
+
+          // Grad.
+          for (int j = 0; j < local_vars.num_referenced; j++) {
+            grad_vec[local_vars.local_to_global[j]] += local_grad(j);
+          }
+          // Hessian.
+          for (int j = 0; j < local_vars.num_referenced; j++) {
+            for (int h = 0; h <= j; h++) {
+              int gj = local_vars.local_to_global[j],
+                  gh = local_vars.local_to_global[h];
+              double val = local_hessian(j, h);
+              // Only fill the lower triangle of the hessian.
+              if (gj <= gh) {
+                triplets.push_back(Eigen::Triplet<double>(gh, gj, val));
+              } else {
+                triplets.push_back(Eigen::Triplet<double>(gj, gh, val));
+              }
+            }
           }
         }
-      }
+      });
+
+    // Convert concurrent_vector to Eigen::VectorXd and std::vector
+    Eigen::VectorXd grad = Eigen::VectorXd::Zero(grad_vec.size());
+    for (size_t i = 0; i < grad_vec.size(); ++i) {
+      grad(i) = grad_vec[i];
     }
-    return {f, grad, triplets};
+    std::vector<Eigen::Triplet<double>> triplets_vec(triplets.begin(), triplets.end());
+    return {f.load(std::memory_order_relaxed), grad, triplets_vec};
   };
 };
 
@@ -222,44 +228,45 @@ EnergyFunc meta_element_func(int num, auto delegate, bool hessian_proj = true) {
   return [num, delegate, hessian_proj](
              const TGenericVariableFactory<Var> &vars) -> ValueAndDerivatives {
     int num_vars = vars.num_vars();
-    double f = 0.0;
+    std::atomic<double> f = 0.0;
     Eigen::VectorXd grad = Eigen::VectorXd::Zero(num_vars);
     std::vector<Eigen::Triplet<double>> triplets;
-// Parallel compute all the values.
-#pragma omp parallel for schedule(static) reduction(+ : f)                     \
-    reduction(merge : triplets) num_threads(omp_get_max_threads() - 1)
-    for (int i = 0; i < num; i++) {
-      LocalMetaVarFactory local_vars(vars.current_mat(), vars.get_state());
-      auto res = delegate(i, local_vars);
-      f += res.val();
-      // Grad.
-      auto local_grad = res.meta_grad();
-      constexpr int M = decltype(local_grad)::first_var();
-      local_grad.for_each([&](const auto &elem) {
-#pragma omp atomic
-        grad(local_vars.local_to_global[TYPE(elem)::Index - M]) += elem.val;
-      });
 
-      // Hessian.
-      auto local_hessian = res.squeezed_hessian();
-      if (hessian_proj) {
-        project_hessian(local_hessian);
-      }
-      for (int j = 0; j < local_hessian.cols(); j++) {
-        for (int h = 0; h <= j; h++) {
-          int gj = local_vars.local_to_global[j],
-              gh = local_vars.local_to_global[h];
-          double val = local_hessian(j, h);
-          // Only fill the lower triangle of the hessian.
-          if (gj <= gh) {
-            triplets.emplace_back(gh, gj, val);
-          } else {
-            triplets.emplace_back(gj, gh, val);
+    tbb::parallel_for(tbb::blocked_range<int>(0, num),
+      [&](const tbb::blocked_range<int>& r) {
+        for (int i = r.begin(); i < r.end(); ++i) {
+          LocalMetaVarFactory local_vars(vars.current_mat(), vars.get_state());
+          auto res = delegate(i, local_vars);
+          f.fetch_add(res.val(), std::memory_order_relaxed);
+          // Grad.
+          auto local_grad = res.meta_grad();
+          constexpr int M = decltype(local_grad)::first_var();
+          local_grad.for_each([&](const auto &elem) {
+            grad(local_vars.local_to_global[TYPE(elem)::Index - M]) += elem.val;
+          });
+
+          // Hessian.
+          auto local_hessian = res.squeezed_hessian();
+          if (hessian_proj) {
+            project_hessian(local_hessian);
+          }
+          for (int j = 0; j < local_hessian.cols(); j++) {
+            for (int h = 0; h <= j; h++) {
+              int gj = local_vars.local_to_global[j],
+                  gh = local_vars.local_to_global[h];
+              double val = local_hessian(j, h);
+              // Only fill the lower triangle of the hessian.
+              if (gj <= gh) {
+                triplets.emplace_back(gh, gj, val);
+              } else {
+                triplets.emplace_back(gj, gh, val);
+              }
+            }
           }
         }
-      }
-    }
-    return {f, grad, triplets};
+      });
+
+    return {f.load(std::memory_order_relaxed), grad, triplets};
   };
 };
 
@@ -297,14 +304,17 @@ public:
 
 GenericEnergyFunc<double> meta_val_func(int num, auto delegate) {
   return [num, delegate](const TGenericVariableFactory<double> &vars) {
-    double res = 0.0;
+    std::atomic<double> res = 0.0;
     MetaValFactory fac(vars.current_mat(), vars.get_state());
-// Aggregate the values.
-#pragma omp parallel for schedule(static) reduction(+ : res)
-    for (int i = 0; i < num; i++) {
-      res += delegate(i, fac);
-    }
-    return res;
+    
+    tbb::parallel_for(tbb::blocked_range<int>(0, num),
+      [&](const tbb::blocked_range<int>& r) {
+        for (int i = r.begin(); i < r.end(); ++i) {
+          res.fetch_add(delegate(i, fac), std::memory_order_relaxed);
+        }
+      });
+
+    return res.load(std::memory_order_relaxed);
   };
 }
 

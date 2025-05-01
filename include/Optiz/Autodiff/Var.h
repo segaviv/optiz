@@ -145,8 +145,6 @@ Var sqr(Var &&a);
 
 } // namespace Optiz
 
-#pragma omp declare reduction(+ : Optiz::Var : omp_out += omp_in)
-
 namespace Eigen {
 
 /**

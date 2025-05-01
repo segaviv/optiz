@@ -49,7 +49,23 @@ void project_hessian(Eigen::Matrix<double, k, k> &hessian,
   // hessian += neg_vecs * proj_vals * neg_vecs.transpose();
 }
 
-extern template void project_hessian(Eigen::Matrix<double, -1, -1> &hessian,
-                                     double epsilon = 1e-6);
+inline void project_hessian(Eigen::MatrixXd &hessian,
+                     double epsilon = 1e-6) {
+
+  Eigen::SelfAdjointEigenSolver<Eigen::MatrixXd> eig(hessian);
+  const auto &eigs = eig.eigenvalues();
+  // Position of the first positive eigenvalue (eigen sorts them in ascending
+  // order).
+  auto selfadjview = hessian.template selfadjointView<Eigen::Lower>();
+  for (int pos = 0; pos < hessian.rows() && eigs(pos) < epsilon; ++pos)
+    selfadjview.rankUpdate(eig.eigenvectors().col(pos), epsilon - eigs(pos));
+  // Which one is more efficient?
+  // ;
+  // if (pos == 0)
+  //   return;
+  // auto neg_vecs = eig.eigenvectors().leftCols(pos);
+  // auto proj_vals = (epsilon - eigs.head(pos).array()).matrix().asDiagonal();
+  // hessian += neg_vecs * proj_vals * neg_vecs.transpose();
+}
 
 } // namespace Optiz
