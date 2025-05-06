@@ -8,7 +8,7 @@ using namespace std::chrono;
 namespace Optiz {
 
 #define VAL_FACTORY(x, state)                                                  \
-  block_start_indices.empty()                                                  \
+  block_start_indices.size() <= 1                                              \
       ? ValFactory<double>(x, _cur_shape, state)                               \
       : VecValFactory(x, block_start_indices, block_shapes)
 
@@ -263,7 +263,7 @@ Problem &Problem::optimize() {
     REPORT_ITER_START(i);
     // Calculate the function and its derivatives.
     std::tie(_last_f, _last_grad, _last_hessian) =
-        block_start_indices.empty()
+        block_start_indices.size() <= 1
             ? calc_energy_with_derivatives(energies,
                                            VarFactory(_cur, _cur_shape, _state))
             : calc_energy_with_derivatives(
@@ -332,7 +332,7 @@ Problem &Problem::optimize() {
 std::tuple<double, Eigen::VectorXd &, Eigen::SparseMatrix<double> &>
 Problem::calc_derivatives() {
   std::tie(_last_f, _last_grad, _last_hessian) =
-      block_start_indices.empty()
+      block_start_indices.size() <= 1
           ? calc_energy_with_derivatives(energies,
                                          VarFactory(_cur, _cur_shape, _state))
           : calc_energy_with_derivatives(
@@ -343,12 +343,12 @@ Problem::calc_derivatives() {
 
 double Problem::calc_value(int i) {
   if (i >= 0 && i < energies.size()) {
-    return block_start_indices.empty()
+    return block_start_indices.size() <= 1
                ? energies[i].value_func(ValFactory<double>(_cur, _cur_shape))
                : energies[i].value_func(
                      VecValFactory(_cur, block_start_indices, block_shapes));
   }
-  return block_start_indices.empty()
+  return block_start_indices.size() <= 1
              ? calc_energy(energies, ValFactory<double>(_cur, _cur_shape))
              : calc_energy(energies, VecValFactory(_cur, block_start_indices,
                                                    block_shapes));
@@ -423,7 +423,7 @@ Problem::line_search(const Eigen::VectorXd &cur, double f,
   for (int i = 0; i < _options.line_search_iterations; i++) {
     auto [x, state] = _advance_func(cur, _state, dir, step_size);
     new_f =
-        block_start_indices.empty()
+        block_start_indices.size() <= 1
             ? calc_energy(energies, ValFactory<double>(x, _cur_shape, state))
             : calc_energy(energies,
                           VecValFactory(x, block_start_indices, block_shapes));
