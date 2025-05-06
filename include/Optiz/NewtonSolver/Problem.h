@@ -140,7 +140,10 @@ public:
           i++;
         }(),
         ...);
-    _cur_shape = {total_size, 1};
+    if (block_start_indices.size() > 1)
+      _cur_shape = {total_size, 1};
+    else
+      _cur_shape = {block_shapes[0].first, block_shapes[0].second};
   }
   Problem(const std::vector<Eigen::MatrixXd> &init);
   Problem(const std::vector<Eigen::MatrixXd> &init, const Options &options);
@@ -308,7 +311,7 @@ private:
 
   Eigen::VectorXd factorize_and_solve();
 
-private:
+public:
   Options _options;
   bool first_solve = true;
   // The current variables values.
