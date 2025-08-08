@@ -127,6 +127,9 @@ template <typename... Args> struct MetaVec {
   decltype(auto) sum() const {
     return reduce([](const auto &a, const auto &b) { return a + b; });
   }
+  decltype(auto) mul() const {
+    return reduce([](const auto &a, const auto &b) { return a * b; });
+  }
 
   decltype(auto) squaredNorm() const {
     return reduce_aux<1>(
