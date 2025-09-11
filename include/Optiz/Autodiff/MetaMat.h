@@ -131,7 +131,7 @@ template <typename... Args> struct MetaMat {
   decltype(auto)
   operator*(const Eigen::Matrix<T, NumRows, NumCols> &other) const {
     static_assert(NumRows >= 0 && NumCols >= 0);
-    static_assert(Rows == NumRows);
+    static_assert(Cols == NumRows);
     return operator*(from_eig_mat(other));
   }
 
@@ -228,7 +228,7 @@ template <typename... Args> struct MetaMat {
   template <int I = -1> decltype(auto) inverse() const {
     auto det = determinant();
     return map([&](const auto &elem, const auto &j) {
-      return elem.template map([&](const auto &elem, const auto &i) {
+      return elem.map([&](const auto &elem, const auto &i) {
         constexpr int sign = (INDEX(i) + INDEX(j)) % 2 == 0 ? 1 : -1;
         return sign * minor<INDEX(j), INDEX(i)>().determinant() / det;
       });
@@ -272,6 +272,14 @@ decltype(auto) eig_to_meta_mat(const EigenType &mat,
     return res;
   }
 }
+
+template <typename... OtherArgs, typename T, int NumRows, int NumCols>
+  decltype(auto)
+ operator*(const Eigen::Matrix<T, NumRows, NumCols> &other, const MetaMat<OtherArgs...> &mat) {
+    static_assert(NumRows >= 0 && NumCols >= 0);
+    static_assert(TYPE(mat)::Rows == NumCols);
+    return eig_to_meta_mat(other) * mat;
+  }
 
 template <typename... SomeArgs>
 std::ostream &operator<<(std::ostream &s, const MetaMat<SomeArgs...> &expr) {
