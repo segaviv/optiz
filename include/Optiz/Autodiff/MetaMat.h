@@ -2,6 +2,7 @@
 #include "MetaUtils.h"
 #include "MetaVec.h"
 
+#include <Eigen/Dense>
 #include <iostream>
 #include <tuple>
 #include <type_traits>
@@ -122,9 +123,28 @@ template <typename... Args> struct MetaMat {
 
   template <typename... OtherArgs>
   decltype(auto) operator*(const MetaMat<OtherArgs...> &other) const {
+    static_assert(Cols == TYPE(other)::Rows);
     auto mat1 = transpose();
     auto res = mul_aux<0>(MetaMat<>(), mat1, other);
     return res;
+  }
+
+  template <typename... OtherArgs>
+  decltype(auto) operator-(const MetaMat<OtherArgs...> &other) const {
+    static_assert(Cols == TYPE(other)::Cols);
+    static_assert(Rows == TYPE(other)::Rows);
+    return map([&](const auto &elem, const auto &index) {
+      return elem - other.template col<INDEX(index)>();
+    });
+  }
+
+  template <typename... OtherArgs>
+  decltype(auto) operator+(const MetaMat<OtherArgs...> &other) const {
+    static_assert(Cols == TYPE(other)::Cols);
+    static_assert(Rows == TYPE(other)::Rows);
+    return map([&](const auto &elem, const auto &index) {
+      return elem + other.template col<INDEX(index)>();
+    });
   }
 
   template <typename... OtherArgs, typename T, int NumRows, int NumCols>
