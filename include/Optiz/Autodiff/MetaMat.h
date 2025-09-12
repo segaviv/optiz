@@ -306,7 +306,9 @@ decltype(auto) operator*(const Eigen::Matrix<T, NumRows, NumCols> &other,
                          const MetaVec<OtherArgs...> &mat) {
   static_assert(NumRows >= 0 && NumCols >= 0);
   static_assert(TYPE(mat)::Size == NumCols);
-  return (eig_to_meta_mat(other) * MetaMat(mat)).template col<0>();
+  auto res_mat = (eig_to_meta_mat(other) * MetaMat(mat));
+  auto res_vec = res_mat.template col<0>();
+  return res_vec;
 }
 
 template <typename... SomeArgs>
