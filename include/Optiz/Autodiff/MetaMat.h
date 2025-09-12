@@ -294,12 +294,20 @@ decltype(auto) eig_to_meta_mat(const EigenType &mat,
 }
 
 template <typename... OtherArgs, typename T, int NumRows, int NumCols>
-  decltype(auto)
- operator*(const Eigen::Matrix<T, NumRows, NumCols> &other, const MetaMat<OtherArgs...> &mat) {
-    static_assert(NumRows >= 0 && NumCols >= 0);
-    static_assert(TYPE(mat)::Rows == NumCols);
-    return eig_to_meta_mat(other) * mat;
-  }
+decltype(auto) operator*(const Eigen::Matrix<T, NumRows, NumCols> &other,
+                         const MetaMat<OtherArgs...> &mat) {
+  static_assert(NumRows >= 0 && NumCols >= 0);
+  static_assert(TYPE(mat)::Rows == NumCols);
+  return eig_to_meta_mat(other) * mat;
+}
+
+template <typename... OtherArgs, typename T, int NumRows, int NumCols>
+decltype(auto) operator*(const Eigen::Matrix<T, NumRows, NumCols> &other,
+                         const MetaVec<OtherArgs...> &mat) {
+  static_assert(NumRows >= 0 && NumCols >= 0);
+  static_assert(TYPE(mat)::Size == NumCols);
+  return (eig_to_meta_mat(other) * MetaMat(mat)).template col<0>();
+}
 
 template <typename... SomeArgs>
 std::ostream &operator<<(std::ostream &s, const MetaMat<SomeArgs...> &expr) {
@@ -307,9 +315,8 @@ std::ostream &operator<<(std::ostream &s, const MetaMat<SomeArgs...> &expr) {
     return s;
   }
   For<0, TYPE(expr)::Rows>([&]<int i>() {
-    For<0, TYPE(expr)::Cols>([&]<int j>() {
-      s << expr.template col<j>().template get<i>() << " ";
-    });
+    For<0, TYPE(expr)::Cols>(
+        [&]<int j>() { s << expr.template col<j>().template get<i>() << " "; });
     if constexpr (i < TYPE(expr)::Rows - 1) {
       s << std::endl;
     }
