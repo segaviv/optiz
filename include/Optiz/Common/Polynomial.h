@@ -12,7 +12,7 @@
         x3(Eigen::RowVector<double, 4>{0, 0, 0, 1}),                           \
         x4(Eigen::RowVector<double, 5>{0, 0, 0, 0, 1}),                        \
         x5(Eigen::RowVector<double, 6>{0, 0, 0, 0, 0, 1});                     \
-    return poly;                                                               \
+    return Optiz::Polynomial(poly);                                            \
   }()
 
 namespace Optiz {
@@ -75,5 +75,43 @@ template <typename T, typename = typename std::enable_if<
 inline Polynomial operator-(const T &scalar, const Polynomial &p1) {
   return Polynomial(scalar) - p1;
 }
+
+inline Polynomial operator-(const Polynomial &p1) {
+  return Polynomial(-p1.coefs);
+}
 Polynomial pow(const Polynomial &p, int n);
 } // namespace Optiz
+
+namespace Eigen {
+
+/**
+ * See https://eigen.tuxfamily.org/dox/TopicCustomizing_CustomScalar.html
+ * and https://eigen.tuxfamily.org/dox/structEigen_1_1NumTraits.html
+ */
+template <> struct NumTraits<Optiz::Polynomial> : NumTraits<double> {
+  typedef Optiz::Polynomial Real;
+  typedef Optiz::Polynomial NonInteger;
+  typedef Optiz::Polynomial Nested;
+
+  enum {
+    IsComplex = 0,
+    IsInteger = 0,
+    IsSigned = 1,
+    RequireInitialization = 1,
+    ReadCost = 1,
+    AddCost = 9,
+    MulCost = 9,
+  };
+};
+
+template <typename BinaryOp>
+struct ScalarBinaryOpTraits<Optiz::Polynomial, double, BinaryOp> {
+  typedef Optiz::Polynomial ReturnType;
+};
+
+template <typename BinaryOp>
+struct ScalarBinaryOpTraits<double, Optiz::Polynomial, BinaryOp> {
+  typedef Optiz::Polynomial ReturnType;
+};
+
+} // namespace Eigen
