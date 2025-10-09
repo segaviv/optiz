@@ -118,7 +118,7 @@ public:
   int offset;
   const std::pair<int, int> block_shape;
   LocalVarBlockFactory(LocalVarFactory<k> &parent_factory, int offset,
-                            const std::pair<int, int> &block_shape)
+                       const std::pair<int, int> &block_shape)
       : parent_factory(parent_factory), offset(offset),
         block_shape(block_shape) {}
 
@@ -229,12 +229,63 @@ consteval auto next_meta_var_id() {
     return next_meta_var_id<Id + 1>();
 }
 
+class LocalMetaVarBlockFactory {
+public:
+  using Scalar = MetaVarScalar;
+  int offset;
+  const std::pair<int, int> block_shape;
+  int *local_to_global;
+  int &num_referenced;
+  Eigen::Map<const Eigen::MatrixXd> cur;
+
+  template <auto ind = int{}, typename = decltype([] {})>
+  LocalMetaVarBlockFactory(int offset, const std::pair<int, int> &block_shape,
+                           int *local_to_global, int &num_referenced,
+                           const Eigen::Map<const Eigen::MatrixXd> &cur)
+      : offset(offset), block_shape(block_shape),
+        local_to_global(local_to_global), num_referenced(num_referenced),
+        cur(cur) {}
+
+  template <auto ind = int{}, typename = decltype([] {})>
+  auto operator()(int i) {
+    local_to_global[num_referenced++] = i + offset;
+    return Optiz::MetaVar<next_meta_var_id<ind>()>(cur(i + offset));
+  }
+
+  template <auto ind = int{}, typename = decltype([] {})>
+  auto operator()(int i, int j) {
+    int index = i + j * block_shape.first + offset;
+    local_to_global[num_referenced++] = index;
+    return Optiz::MetaVar<next_meta_var_id<ind>()>(cur(index));
+  }
+
+  template <int m, int start = 0, typename... Args, auto ind = int{},
+            typename = decltype([] {})>
+  decltype(auto) row(int i, const MetaVec<Args...> &vec = MetaVec<>()) {
+    if constexpr (m == start) {
+      return vec;
+    } else {
+      auto var = operator()<ind>(i, start);
+      auto res = row<m, start + 1>(i, vec.push(var));
+      return res;
+    }
+  }
+};
+
 class LocalMetaVarFactory {
 public:
+  using Scalar = MetaVarScalar;
   template <auto ind = int{}, typename = decltype([] {})>
   LocalMetaVarFactory(const Eigen::Map<const Eigen::MatrixXd> &other,
-                      const std::shared_ptr<void> &state = nullptr)
-      : cur(other), state(state) {}
+                      const std::shared_ptr<void> &state = nullptr,
+                      const std::vector<std::pair<int, int>> &block_shapes = {},
+                      const std::vector<int> &offsets = {})
+      : cur(other), state(state) {
+    for (int i = 0; i < block_shapes.size(); i++) {
+      sub_factories.push_back(LocalMetaVarBlockFactory(
+          offsets[i], block_shapes[i], local_to_global, num_referenced, cur));
+    }
+  }
 
   int num_vars() const { return cur.size(); }
 
@@ -266,10 +317,13 @@ public:
     return *static_cast<const State *>(state.get());
   }
 
+  LocalMetaVarBlockFactory &var_block(int i) { return sub_factories[i]; }
+
   Eigen::Map<const Eigen::MatrixXd> cur;
   std::shared_ptr<void> state;
   int local_to_global[20];
   int num_referenced = 0;
+  std::vector<LocalMetaVarBlockFactory> sub_factories;
 };
 
 EnergyFunc meta_element_func(int num, auto delegate, bool hessian_proj = true) {
@@ -283,7 +337,8 @@ EnergyFunc meta_element_func(int num, auto delegate, bool hessian_proj = true) {
 #pragma omp parallel for schedule(static) reduction(+ : f)                     \
     reduction(merge : triplets) num_threads(omp_get_max_threads() - 1)
     for (int i = 0; i < num; i++) {
-      LocalMetaVarFactory local_vars(vars.current_mat(), vars.get_state());
+      LocalMetaVarFactory local_vars(vars.current_mat(), vars.get_state(),
+                                     vars.block_shapes, vars.offsets);
       auto res = delegate(i, local_vars);
       f += res.val();
       // Grad.
@@ -319,6 +374,7 @@ EnergyFunc meta_element_func(int num, auto delegate, bool hessian_proj = true) {
 
 class MetaValFactory {
 public:
+  using Scalar = MetaVarScalar;
   template <auto ind = int{}, typename = decltype([] {})>
   MetaValFactory(const Eigen::Map<const Eigen::MatrixXd> &other,
                  const std::shared_ptr<void> &state = nullptr)
@@ -344,6 +400,7 @@ public:
   template <typename State> const State &get_state() const {
     return *static_cast<const State *>(state.get());
   }
+  auto &var_block(int i) { return *this; }
 
   Eigen::Map<const Eigen::MatrixXd> cur;
   std::shared_ptr<void> state;

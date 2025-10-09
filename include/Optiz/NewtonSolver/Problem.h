@@ -195,7 +195,7 @@ public:
     energies.push_back(InternalEnergy{
         .derivatives_func =
             meta_element_func(num_elements, energy, project_hessian),
-        .value_func = meta_val_func(num_elements, energy)});
+        .value_func = val_func(num_elements, energy)});
     return *this;
   }
 

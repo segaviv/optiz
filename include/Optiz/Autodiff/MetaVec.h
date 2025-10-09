@@ -1,10 +1,11 @@
 #pragma once
-#include "MetaUtils.h"
 #include "../Common/Functions.h"
+#include "MetaUtils.h"
+#include <Eigen/Dense>
+#include <iostream>
 #include <tuple>
 #include <type_traits>
 #include <utility>
-#include <iostream>
 
 namespace Optiz {
 
@@ -216,6 +217,27 @@ decltype(auto) eig_to_meta_vec(const MetaVec<OtherArgs...> &meta_vec,
 template <typename EigenType>
 decltype(auto) eig_to_meta_vec(const EigenType &vec) {
   return eig_to_meta_vec<0>(MetaVec<>(), vec);
+}
+
+template <typename... Args, typename T, int Rows, int Cols>
+auto operator-(const MetaVec<Args...> &vec,
+               const Eigen::Matrix<T, Rows, Cols> &mat) {
+  return vec - eig_to_meta_vec(mat);
+}
+template <typename... Args, typename T, int Rows, int Cols>
+auto operator-(const Eigen::Matrix<T, Rows, Cols> &mat,
+               const MetaVec<Args...> &vec) {
+  return eig_to_meta_vec(mat) - vec;
+}
+template <typename... Args, typename T, int Rows, int Cols>
+auto operator+(const MetaVec<Args...> &vec,
+               const Eigen::Matrix<T, Rows, Cols> &mat) {
+  return vec + eig_to_meta_vec(mat);
+}
+template <typename... Args, typename T, int Rows, int Cols>
+auto operator+(const Eigen::Matrix<T, Rows, Cols> &mat,
+               const MetaVec<Args...> &vec) {
+  return eig_to_meta_vec(mat) + vec;
 }
 
 } // namespace Optiz
