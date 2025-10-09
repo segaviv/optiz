@@ -19,12 +19,13 @@ VarFactoryWithOffset::VarFactoryWithOffset(const Eigen::VectorXd &init,
     : TGenericVariableFactory<Var>(init, shape, state), offset(offset) {}
 
 VecVarFactory::VecVarFactory(
-    const Eigen::VectorXd &init, const std::vector<int> &block_start_indices,
+    const Eigen::VectorXd &init,
     const std::vector<std::pair<int, int>> &block_shapes)
-    : TGenericVariableFactory<Var>(init, {init.size(), 1}) {
-  for (int i = 0; i < block_start_indices.size(); i++) {
+    : TGenericVariableFactory<Var>(init, {init.size(), 1}, nullptr,
+                                   block_shapes) {
+  for (int i = 0; i < block_shapes.size(); i++) {
     var_factories.push_back(
-        VarFactoryWithOffset(init, block_shapes[i], block_start_indices[i]));
+        VarFactoryWithOffset(init, block_shapes[i], offsets[i]));
   }
 }
 
@@ -52,12 +53,12 @@ double ValFactoryWithOffset::operator()(int i, int j) const {
 }
 
 VecValFactory::VecValFactory(
-    const Eigen::VectorXd &init, const std::vector<int> &block_start_indices,
+    const Eigen::VectorXd &init,
     const std::vector<std::pair<int, int>> &block_shapes)
-    : ValFactory<double>(init, {init.size(), 1}) {
-  for (int i = 0; i < block_start_indices.size(); i++) {
+    : ValFactory<double>(init, {init.size(), 1}, nullptr, block_shapes) {
+  for (int i = 0; i < block_shapes.size(); i++) {
     val_factories.push_back(
-        ValFactoryWithOffset(init, block_shapes[i], block_start_indices[i]));
+        ValFactoryWithOffset(init, block_shapes[i], offsets[i]));
   }
 }
 
@@ -67,7 +68,8 @@ double VecValFactory::operator()(int i, int j) const {
   return val_factories[i](j);
 }
 
-const TGenericVariableFactory<double> &VecValFactory::var_block(int index) const {
+const TGenericVariableFactory<double> &
+VecValFactory::var_block(int index) const {
   return val_factories[index];
 }
 

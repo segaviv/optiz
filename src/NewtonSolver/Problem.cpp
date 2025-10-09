@@ -8,9 +8,8 @@ using namespace std::chrono;
 namespace Optiz {
 
 #define VAL_FACTORY(x, state)                                                  \
-  block_start_indices.size() <= 1                                              \
-      ? ValFactory<double>(x, _cur_shape, state)                               \
-      : VecValFactory(x, block_start_indices, block_shapes)
+  block_start_indices.size() <= 1 ? ValFactory<double>(x, _cur_shape, state)   \
+                                  : VecValFactory(x, block_shapes)
 
 #define REPORT_ITER_START(i)                                                   \
   time_point<high_resolution_clock> start, stop, stop2, stop3;                 \
@@ -266,9 +265,8 @@ Problem &Problem::optimize() {
         block_start_indices.size() <= 1
             ? calc_energy_with_derivatives(energies,
                                            VarFactory(_cur, _cur_shape, _state))
-            : calc_energy_with_derivatives(
-                  energies,
-                  VecVarFactory(_cur, block_start_indices, block_shapes));
+            : calc_energy_with_derivatives(energies,
+                                           VecVarFactory(_cur, block_shapes));
     REPORT_CALC_TIME(_last_f, filter);
     // If remove unreferenced is true, adjust the gradient and hessian.
     if (_options.remove_unreferenced) {
@@ -335,9 +333,8 @@ Problem::calc_derivatives() {
       block_start_indices.size() <= 1
           ? calc_energy_with_derivatives(energies,
                                          VarFactory(_cur, _cur_shape, _state))
-          : calc_energy_with_derivatives(
-                energies,
-                VecVarFactory(_cur, block_start_indices, block_shapes));
+          : calc_energy_with_derivatives(energies,
+                                         VecVarFactory(_cur, block_shapes));
   return {_last_f, _last_grad, _last_hessian};
 }
 
@@ -345,13 +342,11 @@ double Problem::calc_value(int i) {
   if (i >= 0 && i < energies.size()) {
     return block_start_indices.size() <= 1
                ? energies[i].value_func(ValFactory<double>(_cur, _cur_shape))
-               : energies[i].value_func(
-                     VecValFactory(_cur, block_start_indices, block_shapes));
+               : energies[i].value_func(VecValFactory(_cur, block_shapes));
   }
   return block_start_indices.size() <= 1
              ? calc_energy(energies, ValFactory<double>(_cur, _cur_shape))
-             : calc_energy(energies, VecValFactory(_cur, block_start_indices,
-                                                   block_shapes));
+             : calc_energy(energies, VecValFactory(_cur, block_shapes));
 }
 
 void Problem::set_end_iteration_callback(std::function<void()> callback) {
@@ -425,8 +420,7 @@ Problem::line_search(const Eigen::VectorXd &cur, double f,
     new_f =
         block_start_indices.size() <= 1
             ? calc_energy(energies, ValFactory<double>(x, _cur_shape, state))
-            : calc_energy(energies,
-                          VecValFactory(x, block_start_indices, block_shapes));
+            : calc_energy(energies, VecValFactory(x, block_shapes));
     if (!constraints_energies.empty() ||
         armijo_cond(f, new_f, step_size, dir_dot_grad, 1e-6)) {
       return {x, state};

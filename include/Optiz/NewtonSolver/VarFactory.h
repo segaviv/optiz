@@ -9,10 +9,17 @@ namespace Optiz {
 
 template <typename T> class TGenericVariableFactory {
 public:
-  TGenericVariableFactory(const Eigen::VectorXd &current,
-                          const std::pair<int, int> &shape,
-                          const std::shared_ptr<void> &state = nullptr)
-      : _current(current), shape(shape), state(state) {}
+  TGenericVariableFactory(
+      const Eigen::VectorXd &current, const std::pair<int, int> &shape,
+      const std::shared_ptr<void> &state = nullptr,
+      const std::vector<std::pair<int, int>> &block_shapes = {})
+      : _current(current), shape(shape), state(state),
+        block_shapes(block_shapes) {
+    offsets.push_back(0);
+    for (const auto &bs : block_shapes) {
+      offsets.push_back(offsets.back() + bs.first * bs.second);
+    }
+  }
 
   using Scalar = T;
 
@@ -32,6 +39,14 @@ public:
     }
     return result;
   }
+  template<int k>
+  Eigen::RowVector<T, k> row(int i) const {
+    Eigen::RowVector<T, k> result;
+    for (int j = 0; j < k; j++) {
+      result(j) = operator()(i, j);
+    }
+    return result;
+  }
 
   const T &get(const T &v) { return v; }
 
@@ -42,12 +57,16 @@ public:
   }
 
   // Overridden in case of more than one variables block.
-  virtual const TGenericVariableFactory &var_block(int index) const { return *this; }
+  virtual const TGenericVariableFactory &var_block(int index) const {
+    return *this;
+  }
 
-protected:
+public:
   const Eigen::VectorXd &_current;
   std::pair<int, int> shape;
   std::shared_ptr<void> state;
+  std::vector<std::pair<int, int>> block_shapes;
+  std::vector<int> offsets;
 };
 
 class VarFactoryWithOffset : public TGenericVariableFactory<Var> {
@@ -65,7 +84,6 @@ protected:
 class VecVarFactory : public TGenericVariableFactory<Var> {
 public:
   VecVarFactory(const Eigen::VectorXd &init,
-                const std::vector<int> &block_start_indices,
                 const std::vector<std::pair<int, int>> &block_shapes);
 
   Var operator()(int i) const;
@@ -91,8 +109,9 @@ public:
 template <typename T> class ValFactory : public TGenericVariableFactory<T> {
 public:
   ValFactory(const Eigen::VectorXd &init, const std::pair<int, int> &shape,
-             const std::shared_ptr<void> &state = nullptr)
-      : TGenericVariableFactory<T>(init, shape, state) {}
+             const std::shared_ptr<void> &state = nullptr,
+            const std::vector<std::pair<int, int>> &block_shapes = {})
+      : TGenericVariableFactory<T>(init, shape, state, block_shapes) {}
 
   T operator()(int i) const { return this->_current(i); }
 
@@ -118,7 +137,6 @@ private:
 class VecValFactory : public ValFactory<double> {
 public:
   VecValFactory(const Eigen::VectorXd &init,
-                const std::vector<int> &block_start_indices,
                 const std::vector<std::pair<int, int>> &block_shapes);
 
   double operator()(int i) const;

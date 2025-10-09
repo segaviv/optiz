@@ -100,7 +100,7 @@ class MetaVarScalar : public MetaVarBase<MetaVarScalar> {
 public:
   static constexpr bool is_leaf = false;
   double _value;
-  static const MetaGrad<> _grad;
+  static const inline auto _grad = MetaGrad(MetaVec<>());
 
   MetaVarScalar(double value) : _value(value) {}
 
