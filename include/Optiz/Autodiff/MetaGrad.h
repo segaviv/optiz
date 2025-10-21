@@ -1,6 +1,6 @@
 #pragma once
-#include "MetaUtils.h"
-#include "MetaVec.h"
+#include "../Meta/MetaUtils.h"
+#include "../Meta/MetaVec.h"
 #include <iostream>
 
 namespace Optiz {

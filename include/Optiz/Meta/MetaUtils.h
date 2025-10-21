@@ -27,11 +27,11 @@ template <int I, int N, typename Func> constexpr void For(Func &&f) {
 }
 
 template <typename Derived> class MetaVarBase;
-template <typename Derived1,
-          typename GradType = decltype(std::declval<Derived1>()._grad)>
-class MetaVarChain;
+// template <typename Derived1,
+//           typename GradType = decltype(std::declval<Derived1>()._grad)>
+// class MetaVarChain;
 
-template <typename Derived1>
-MetaVarChain<Derived1> sqr(MetaVarBase<Derived1> const &derived1);
+// template <typename Derived1>
+// MetaVarChain<Derived1> sqr(MetaVarBase<Derived1> const &derived1);
 
 } // namespace Optiz
