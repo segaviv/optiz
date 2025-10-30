@@ -64,6 +64,15 @@ template <typename... Args> struct MetaMat {
           exprs);
     }
   }
+  template <typename T> decltype(auto) push_col_at_start(const T &t) const {
+    if constexpr (Cols == 0) {
+      return MetaMat<T>(t);
+    } else {
+      return std::apply(
+          [&](auto &...args) { return MetaMat<T, Args...>(t, args...); },
+          exprs);
+    }
+  }
 
   template <int I, int J, typename... OtherArgs>
   decltype(auto) row_aux(const MetaVec<OtherArgs...> &vec) const {
@@ -93,39 +102,41 @@ template <typename... Args> struct MetaMat {
     return res;
   }
 
-  template <int I, int J, typename... OtherArgs, typename... Mat1,
-            typename... Mat2>
-  static decltype(auto) build_col_aux(const MetaVec<OtherArgs...> &vec,
-                                      const MetaMat<Mat1...> &mat1,
-                                      const MetaMat<Mat2...> &mat2) {
-    if constexpr (I == TYPE(mat1)::Cols) {
-      return vec;
+  template <int I, int J, int K = 0>
+  auto mul_mat_entry(const MetaMat &other) const {
+    if constexpr (K == Cols - 1) {
+      return col<K>().template get<I>() *
+             other.template col<J>().template get<K>();
     } else {
-      auto res = build_col_aux<I + 1, J>(
-          vec.push(mat1.template col<I>().dot(mat2.template col<J>())), mat1,
-          mat2);
-      return res;
+      return col<K>().template get<I>() *
+                 other.template col<J>().template get<K>() +
+             mul_mat_entry<I, J, K + 1>(other);
     }
   }
-  template <int J, typename... OtherArgs, typename... Mat1, typename... Mat2>
-  static decltype(auto) mul_aux(const MetaMat<OtherArgs...> &mat,
-                                const MetaMat<Mat1...> &mat1,
-                                const MetaMat<Mat2...> &mat2) {
-    if constexpr (J == TYPE(mat2)::Cols) {
-      return mat;
+
+  template <int Col, int I = 0, typename... OtherArgs>
+  auto mul_mat_col(const MetaMat<OtherArgs...> &other) const {
+    if constexpr (I == Rows) {
+      return MetaVec<>();
     } else {
-      auto res = mul_aux<J + 1>(
-          mat.push_col(build_col_aux<0, J>(MetaVec<>(), mat1, mat2)), mat1,
-          mat2);
-      return res;
+      return mul_mat_col<Col, I + 1>(other).push_at_start(
+          mul_mat_entry<I, Col>(other));
+    }
+  }
+  template <int I = 0, int J = 0, typename... OtherArgs>
+  auto mul_mat(const MetaMat<OtherArgs...> &other) const {
+    static_assert(Cols == TYPE(other)::Rows);
+    if constexpr (J == TYPE(other)::Cols) {
+      return MetaMat<>();
+    } else {
+      return mul_mat<I, J + 1>(other).push_col_at_start(mul_mat_col<J>(other));
     }
   }
 
   template <typename... OtherArgs>
   decltype(auto) operator*(const MetaMat<OtherArgs...> &other) const {
     static_assert(Cols == TYPE(other)::Rows);
-    auto mat1 = transpose();
-    auto res = mul_aux<0>(MetaMat<>(), mat1, other);
+    auto res = mul_mat(other);
     return res;
   }
 
@@ -225,7 +236,7 @@ template <typename... Args> struct MetaMat {
 
   template <int I = 0> decltype(auto) determinant() const {
     if constexpr (0 == Cols) {
-      return 0;
+      return 1;
     } else if constexpr (Cols == 1 && Rows == 1) {
       return col<0>().template get<0>();
     } else if constexpr (I == Rows - 1) {
@@ -245,7 +256,7 @@ template <typename... Args> struct MetaMat {
     }
   }
 
-  template <int I = -1> decltype(auto) inverse() const {
+  template <int I = -1> auto inverse() const {
     auto det = determinant();
     return map([&](const auto &elem, const auto &j) {
       return elem.map([&](const auto &elem, const auto &i) {
@@ -255,21 +266,6 @@ template <typename... Args> struct MetaMat {
     });
   }
 
-  // template <> decltype(auto) inverse<3>() const {
-  //   MetaMat<> res;
-  //   auto res1 = res.push_col(col<1>().cross3(col<2>()));
-  //   auto res2 = res1.push_col(col<2>().cross3(col<0>()));
-  //   auto res3 = res2.push_col(col<0>().cross3(col<1>()));
-  //   auto det = res3.template col<0>().template dot(col<0>());
-
-  //   return res3
-  //       .map([&](const auto &elem, const auto &j) {
-  //         return elem.template map(
-  //             [&](const auto &elem, const auto &i) { return elem / det; });
-  //       })
-  //       .transpose();
-  // }
-
   template <int I = 0> decltype(auto) squaredNorm() const {
     if constexpr (0 == Cols) {
       return 0;
@@ -278,6 +274,14 @@ template <typename... Args> struct MetaMat {
     } else {
       return col<I>().squaredNorm() + squaredNorm<I + 1>();
     }
+  }
+
+  auto to_eigen() const {
+    Eigen::Matrix<typename TYPE(col<0>().template get<0>()), Rows, Cols> mat;
+    For<0, Cols>([&]<int j>() {
+      For<0, Rows>([&]<int i>() { mat(i, j) = col<j>().template get<i>(); });
+    });
+    return mat;
   }
 };
 

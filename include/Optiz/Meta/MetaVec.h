@@ -32,6 +32,16 @@ template <typename... Args> struct MetaVec {
     }
   }
 
+  template <typename T> decltype(auto) push_at_start(const T &t) const {
+    if constexpr (sizeof...(Args) == 0) {
+      return MetaVec<T>(t);
+    } else {
+      return std::apply(
+          [&](auto &...args) { return MetaVec<T, Args...>(t, args...); },
+          exprs);
+    }
+  }
+
   template <typename... OtherArgs>
   decltype(auto) concat(const MetaVec<OtherArgs...> &other) const {
     return std::apply(
@@ -190,6 +200,7 @@ template <typename... Args> struct MetaVec {
     return res2.push(get<1>() * other.template get<0>() -
                      get<0>() * other.template get<1>());
   }
+
 };
 
 template <typename... SomeArgs>

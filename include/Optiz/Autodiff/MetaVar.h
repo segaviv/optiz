@@ -618,7 +618,7 @@ template <InheritsFromMetaBase Derived1> auto sqr(Derived1 const &derived1) {
 }
 
 template <InheritsFromMetaBase Derived1>
-auto operator-(MetaVarBase<Derived1> const &derived1) {
+auto operator-(Derived1 const &derived1) {
   return MetaVarChain<Derived1>(derived1, -derived1.val(), -1, 0);
 }
 
