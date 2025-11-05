@@ -102,8 +102,8 @@ template <typename... Args> struct MetaMat {
     return res;
   }
 
-  template <int I, int J, int K = 0>
-  auto mul_mat_entry(const MetaMat &other) const {
+  template <int I, int J, int K = 0, typename... OtherArgs>
+  auto mul_mat_entry(const MetaMat<OtherArgs...> &other) const {
     if constexpr (K == Cols - 1) {
       return col<K>().template get<I>() *
              other.template col<J>().template get<K>();
