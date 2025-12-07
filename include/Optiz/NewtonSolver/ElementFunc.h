@@ -38,9 +38,9 @@ EnergyFunc element_func(int num, SparseEnergyFunc<Var> delegate,
 
 GenericEnergyFunc<double> val_func(int num, SparseEnergyFunc<double> delegate);
 
-template <int k> class LocalVarBlockFactory;
+template <int k, bool compute_hessian = true> class LocalVarBlockFactory;
 
-template <int k> class LocalVarFactory {
+template <int k, bool compute_hessian = true> class LocalVarFactory {
 public:
   LocalVarFactory(const Eigen::Map<const Eigen::MatrixXd> &other,
                   const std::shared_ptr<void> &state = nullptr,
@@ -48,12 +48,12 @@ public:
                   const std::vector<int> &offsets = {})
       : cur(other), state(state) {
     for (int i = 0; i < block_shapes.size(); i++) {
-      sub_factories.push_back(
-          LocalVarBlockFactory<k>(*this, offsets[i], block_shapes[i]));
+      sub_factories.push_back(LocalVarBlockFactory<k, compute_hessian>(
+          *this, offsets[i], block_shapes[i]));
     }
   }
 
-  using Scalar = TDenseVar<k>;
+  using Scalar = TDenseVar<k, compute_hessian>;
 
   int get_local_index(int global) {
     for (int i = 0; i < num_referenced; i++) {
@@ -65,19 +65,17 @@ public:
     return num_referenced - 1;
   }
 
-  TDenseVar<k> operator()(int i) {
+  Scalar operator()(int i) {
     int local_index = get_local_index(i);
-    return TDenseVar<k>(cur(i), local_index);
+    return Scalar(cur(i), local_index);
   }
 
-  TDenseVar<k> operator()(int i, int j) {
-    return operator()(i + j * cur.rows());
-  }
+  Scalar operator()(int i, int j) { return operator()(i + j * cur.rows()); }
 
   int num_vars() const { return cur.size(); }
 
-  Eigen::RowVectorX<TDenseVar<k>> row(int i) {
-    Eigen::RowVectorX<TDenseVar<k>> result(cur.cols());
+  Eigen::RowVectorX<Scalar> row(int i) {
+    Eigen::RowVectorX<Scalar> result(cur.cols());
     int global_index = i;
     for (int j = 0; j < cur.cols(); j++, global_index += cur.rows()) {
       int ind = get_local_index(global_index);
@@ -87,8 +85,8 @@ public:
     return result;
   }
 
-  template <int m> Eigen::RowVector<TDenseVar<k>, m> row(int i) {
-    Eigen::RowVector<TDenseVar<k>, m> result;
+  template <int m> Eigen::RowVector<Scalar, m> row(int i) {
+    Eigen::RowVector<Scalar, m> result;
     int global_index = i;
     for (int j = 0; j < m; j++, global_index += cur.rows()) {
       int ind = get_local_index(global_index);
@@ -102,34 +100,36 @@ public:
     return *static_cast<const State *>(state.get());
   }
 
-  LocalVarBlockFactory<k> &var_block(int i) { return sub_factories[i]; }
+  LocalVarBlockFactory<k, compute_hessian> &var_block(int i) {
+    return sub_factories[i];
+  }
 
   Eigen::Map<const Eigen::MatrixXd> cur;
   std::shared_ptr<void> state;
   int local_to_global[k];
   int num_referenced = 0;
-  std::vector<LocalVarBlockFactory<k>> sub_factories;
+  std::vector<LocalVarBlockFactory<k, compute_hessian>> sub_factories;
 };
 
-template <int k> class LocalVarBlockFactory {
+template <int k, bool compute_hessian> class LocalVarBlockFactory {
 public:
-  using Scalar = TDenseVar<k>;
-  LocalVarFactory<k> &parent_factory;
+  using Scalar = TDenseVar<k, compute_hessian>;
+  LocalVarFactory<k, compute_hessian> &parent_factory;
   int offset;
   const std::pair<int, int> block_shape;
-  LocalVarBlockFactory(LocalVarFactory<k> &parent_factory, int offset,
-                       const std::pair<int, int> &block_shape)
+  LocalVarBlockFactory(LocalVarFactory<k, compute_hessian> &parent_factory,
+                       int offset, const std::pair<int, int> &block_shape)
       : parent_factory(parent_factory), offset(offset),
         block_shape(block_shape) {}
 
-  TDenseVar<k> operator()(int i) { return parent_factory(i + offset); }
+  Scalar operator()(int i) { return parent_factory(i + offset); }
 
-  TDenseVar<k> operator()(int i, int j) {
+  Scalar operator()(int i, int j) {
     return parent_factory(i + j * block_shape.first + offset);
   }
 
-  Eigen::RowVectorX<TDenseVar<k>> row(int i) {
-    Eigen::RowVectorX<TDenseVar<k>> result(block_shape.second);
+  Eigen::RowVectorX<Scalar> row(int i) {
+    Eigen::RowVectorX<Scalar> result(block_shape.second);
     int global_index = i;
     for (int j = 0; j < block_shape.second;
          j++, global_index += block_shape.first) {
@@ -140,8 +140,8 @@ public:
     return result;
   }
 
-  template <int m> Eigen::RowVector<TDenseVar<k>, m> row(int i) {
-    Eigen::RowVector<TDenseVar<k>, m> result;
+  template <int m> Eigen::RowVector<Scalar, m> row(int i) {
+    Eigen::RowVector<Scalar, m> result;
     int global_index = i;
     for (int j = 0; j < m; j++, global_index += block_shape.first) {
       int ind = parent_factory.get_local_index(offset + global_index);
@@ -152,13 +152,8 @@ public:
   }
 };
 
-template <int k>
-using LocalEnergyFunction =
-    std::function<TDenseVar<k>(int index, LocalVarFactory<k> &)>;
-
-template <int k>
-EnergyFunc element_func(int num, LocalEnergyFunction<k> delegate,
-                        bool project_hessian = true) {
+template <int k, bool compute_hessian = true>
+EnergyFunc element_func(int num, auto delegate, bool project_hessian = true) {
   return [num, delegate, project_hessian](
              const TGenericVariableFactory<Var> &vars) -> ValueAndDerivatives {
     int num_vars = vars.num_vars();
@@ -170,11 +165,14 @@ EnergyFunc element_func(int num, LocalEnergyFunction<k> delegate,
 #pragma omp parallel for schedule(static) reduction(+ : f)                     \
     reduction(merge : triplets) num_threads(omp_get_max_threads() - 1)
     for (int i = 0; i < num; i++) {
-      LocalVarFactory<k> local_vars(vars.current_mat(), vars.get_state(),
-                                    vars.block_shapes, vars.offsets);
-      TDenseVar<k> res = delegate(i, local_vars);
-      if (project_hessian) {
-        res.projectHessian();
+      LocalVarFactory<k, compute_hessian> local_vars(
+          vars.current_mat(), vars.get_state(), vars.block_shapes,
+          vars.offsets);
+      TDenseVar<k, compute_hessian> res = delegate(i, local_vars);
+      if constexpr (compute_hessian) {
+        if (project_hessian) {
+          res.projectHessian();
+        }
       }
 
       // Aggregate the result.
@@ -189,16 +187,18 @@ EnergyFunc element_func(int num, LocalEnergyFunction<k> delegate,
         grad(local_vars.local_to_global[j]) += local_grad(j);
       }
       // Hessian.
-      for (int j = 0; j < local_vars.num_referenced; j++) {
-        for (int h = 0; h <= j; h++) {
-          int gj = local_vars.local_to_global[j],
-              gh = local_vars.local_to_global[h];
-          double val = local_hessian(j, h);
-          // Only fill the lower triangle of the hessian.
-          if (gj <= gh) {
-            triplets.emplace_back(gh, gj, val);
-          } else {
-            triplets.emplace_back(gj, gh, val);
+      if constexpr (compute_hessian) {
+        for (int j = 0; j < local_vars.num_referenced; j++) {
+          for (int h = 0; h <= j; h++) {
+            int gj = local_vars.local_to_global[j],
+                gh = local_vars.local_to_global[h];
+            double val = local_hessian(j, h);
+            // Only fill the lower triangle of the hessian.
+            if (gj <= gh) {
+              triplets.emplace_back(gh, gj, val);
+            } else {
+              triplets.emplace_back(gj, gh, val);
+            }
           }
         }
       }

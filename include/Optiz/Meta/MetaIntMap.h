@@ -34,6 +34,19 @@ template <typename Vec = MetaVec<>> struct MetaIntMap {
     }
   }
 
+  template <int I, int J = 0> constexpr bool has_key() const {
+    if constexpr (J == TYPE(entries)::Size) {
+      return false;
+    } else {
+      constexpr int index = TYPE(entries.template get<J>())::Index;
+      if constexpr (index == I) {
+        return true;
+      } else {
+        return has_key<I, J + 1>();
+      }
+    }
+  }
+
   template <int I, typename Default, int J = 0> decltype(auto) get() const {
     if constexpr (J == TYPE(entries)::Size) {
       return Default();
@@ -70,9 +83,15 @@ template <typename Vec = MetaVec<>> struct MetaIntMap {
     } else {
       constexpr int index = TYPE(other.entries.template get<I>())::Index;
       auto entry = other.entries.template get<I>();
-      auto new_map = this->template set<index>(
-          this->template get<index, double>() + entry.val);
-      return new_map.template operator+ <OtherMap, I + 1>(other);
+
+      if constexpr (this->template has_key<index>()) {
+        auto new_value = this->template get<index, void>() + entry.val;
+        auto new_map = this->template set<index>(new_value);
+        return new_map.template operator+ <OtherMap, I + 1>(other);
+      } else {
+        auto new_map = this->template set<index>(entry.val);
+        return new_map.template operator+ <OtherMap, I + 1>(other);
+      }
     }
   }
   template <typename OtherMap, int I = 0>

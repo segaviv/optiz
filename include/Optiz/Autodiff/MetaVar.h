@@ -608,7 +608,7 @@ auto pow(Derived1 const &derived1, const G &exponent) {
   double f2 = std::pow(derived1.val(), exponent - 2);
   double f1 = f2 * derived1.val();
   double f = f1 * derived1.val();
-  return MetaVarChain<Derived1, G>(derived1, f, exponent * f1,
+  return MetaVarChain<Derived1>(derived1, f, exponent * f1,
                                    exponent * (exponent - 1) * f2);
 }
 

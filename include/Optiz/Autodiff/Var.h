@@ -20,6 +20,15 @@ public:
   Var &operator=(Var &&);
   Var &operator=(double val);
 
+  template <int Rows, int Cols>
+  static Eigen::Matrix<Var, Rows, Cols>
+  from_eigen(const Eigen::Matrix<double, Rows, Cols> &mat, int start_index = 0) {
+    return Eigen::Matrix<Var, Rows, Cols>::NullaryExpr(
+        mat.rows(), mat.cols(), [&mat, start_index](Eigen::Index i, Eigen::Index j) {
+          return Var(mat(i, j), static_cast<int>(start_index + i + j * mat.rows()));
+        });
+  }
+
   // Getters.
   double val() const;
   inline double &val() { return _val; }

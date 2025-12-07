@@ -280,11 +280,13 @@ Problem &Problem::optimize() {
     }
 
     // Find direction.
-    if (!_options.cache_pattern || (_options.cache_pattern && first_solve)) {
+    if (_last_hessian.nonZeros() > 0 && !_options.cache_pattern ||
+        (_options.cache_pattern && first_solve)) {
       analyze_pattern();
       first_solve = false;
     }
-    Eigen::VectorXd d = factorize_and_solve();
+    Eigen::VectorXd d =
+        _last_hessian.nonZeros() > 0 ? factorize_and_solve() : -_last_grad;
     REPORT_SOLVE();
     if (_options.remove_unreferenced && !uncompress_inds.empty()) {
       d = uncompress(d, uncompress_inds, _cur.size());

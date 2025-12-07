@@ -8,25 +8,25 @@
 
 namespace Optiz {
 
-template <int k> class TDenseVar {
+template <int k, bool compute_hessian = true> class TDenseVar {
 public:
   using KVEC = Eigen::Matrix<double, k, 1>;
   using KMAT = Eigen::Matrix<double, k, k>;
 
   TDenseVar() = default;
-  TDenseVar(double val, const KVEC &vec, const KMAT &mat)
+  TDenseVar(double val, const KVEC &vec, const auto &mat)
       : _val(val), _grad(vec), _hessian(mat) {}
 
   TDenseVar(double val) : _val(val) {}
-  TDenseVar(double val, int index) : _val(val) { _grad(index) = 1.0; }
+  TDenseVar(double val, int index) : _val(val), _grad(KVEC::Unit(index)) {}
 
   // Getters.
   inline double val() const { return _val; }
   inline double &val() { return _val; }
   inline const KVEC &grad() const { return _grad; }
   inline KVEC &grad() { return _grad; }
-  inline const KMAT &hessian() const { return _hessian; }
-  inline KMAT &hessian() { return _hessian; }
+  inline const auto &hessian() const { return _hessian; }
+  inline auto &hessian() { return _hessian; }
   using Tup = std::tuple<double, Eigen::VectorXd, Eigen::MatrixXd>;
   inline operator Tup() const { return {_val, _grad, _hessian}; }
 
@@ -45,10 +45,11 @@ public:
   }
 
   TDenseVar &operator*=(const TDenseVar &b) {
-    _hessian *= b._val;
-    _hessian += _grad * b._grad.transpose() + b._grad * _grad.transpose() +
-                _val * b._hessian;
-
+    if constexpr (compute_hessian) {
+      _hessian *= b._val;
+      _hessian += _grad * b._grad.transpose() + b._grad * _grad.transpose() +
+                  _val * b._hessian;
+    }
     _grad *= b._val;
     _grad += _val * b._grad;
     _val *= b._val;
@@ -57,28 +58,33 @@ public:
   TDenseVar &operator*=(double b) {
     _val *= b;
     _grad *= b;
-    _hessian *= b;
+    if constexpr (compute_hessian)
+      _hessian *= b;
     return *this;
   }
   TDenseVar &operator/=(const TDenseVar &b) {
     _val /= b._val;
     _grad /= b._val;
     _grad -= b._grad * (_val / b._val);
-    _hessian -= _grad * b._grad.transpose() + b._grad * _grad.transpose() +
-                _val * b._hessian;
-    _hessian /= b._val;
+    if constexpr (compute_hessian) {
+      _hessian -= _grad * b._grad.transpose() + b._grad * _grad.transpose() +
+                  _val * b._hessian;
+      _hessian /= b._val;
+    }
     return *this;
   }
   TDenseVar &operator/=(double b) {
     _val /= b;
     _grad /= b;
-    _hessian /= b;
+    if constexpr (compute_hessian)
+      _hessian /= b;
     return *this;
   }
   TDenseVar &operator+=(const TDenseVar &b) {
     _val += b._val;
     _grad += b._grad;
-    _hessian += b._hessian;
+    if constexpr (compute_hessian)
+      _hessian += b._hessian;
     return *this;
   }
   TDenseVar &operator+=(double b) {
@@ -88,7 +94,8 @@ public:
   TDenseVar &operator-=(const TDenseVar &b) {
     _val -= b._val;
     _grad -= b._grad;
-    _hessian -= b._hessian;
+    if constexpr (compute_hessian)
+      _hessian -= b._hessian;
     return *this;
   }
   TDenseVar &operator-=(double b) {
@@ -97,38 +104,37 @@ public:
   }
   TDenseVar &chain_self(double val, double grad, double hessian) {
     _val = val;
-    _hessian *= grad;
-    _hessian += hessian * _grad * _grad.transpose();
+    if constexpr (compute_hessian) {
+      _hessian *= grad;
+      _hessian += hessian * _grad * _grad.transpose();
+    }
     _grad *= grad;
     return *this;
   }
-  TDenseVar chain(double val, double grad, double hessian) const {
+  TDenseVar chain(double val, double grad, double hessian) const
+    requires(compute_hessian)
+  {
     return TDenseVar(val, _grad * grad,
                      _hessian * grad + hessian * _grad * _grad.transpose());
+  }
+  TDenseVar chain(double val, double grad) const
+    requires(!compute_hessian)
+  {
+    return TDenseVar(val, _grad * grad, Empty());
   }
 
   TDenseVar inv() const {
     double valsqr = _val * _val;
-    double valcube = valsqr * _val;
-    return chain(1 / _val, -1 / valsqr, 2 / valcube);
-  }
-  TDenseVar &inv_self() {
-    double valsqr = _val * _val;
-    double valcube = valsqr * _val;
-    chain_self(1 / _val, -1 / valsqr, 2 / valcube);
-    return *this;
-  }
-  TDenseVar &neg() {
-    chain_self(-_val, -1.0, 0.0);
-    return *this;
+    if constexpr (compute_hessian) {
+      double valcube = valsqr * _val;
+      return chain(1 / _val, -1 / valsqr, 2 / valcube);
+    } else {
+      return chain(1 / _val, -1 / valsqr);
+    }
   }
 
   // Mul operator between two TDenseVars.
   friend TDenseVar operator*(const TDenseVar &a, const TDenseVar &b) {
-    // return TDenseVar(a._val * b._val, a._grad * b._val + a._val * b._grad,
-    //                  a._grad * b._grad.transpose() +
-    //                      b._grad * a._grad.transpose() + a._hessian * b._val
-    //                      + a._val * b._hessian);
     return TDenseVar(a) *= b;
   }
   friend TDenseVar operator*(double b, const TDenseVar &a) {
@@ -152,8 +158,6 @@ public:
 
   // Add operator between two TDenseVars.
   friend TDenseVar operator+(const TDenseVar &a, const TDenseVar &b) {
-    // return TDenseVar(a._val + b._val, a._grad + b._grad,
-    //                  a._hessian + b._hessian);
     return TDenseVar(a) += b;
   }
   // Add operator between TDenseVar and double
@@ -180,7 +184,10 @@ public:
   }
 
   friend TDenseVar operator-(const TDenseVar &a) {
-    return a.chain(-a._val, -1.0, 0.0);
+    if constexpr (compute_hessian)
+      return a.chain(-a._val, -1.0, 0.0);
+    else
+      return a.chain(-a._val, -1.0);
   }
   friend TDenseVar operator+(const TDenseVar &a) {
     TDenseVar res(a);
@@ -189,39 +196,66 @@ public:
   }
   friend TDenseVar sqrt(const TDenseVar &a) {
     const auto &sqrt_a = std::sqrt(a._val);
-    return a.chain(sqrt_a, 0.5 / sqrt_a, -0.25 / (sqrt_a * a._val));
+    if constexpr (compute_hessian)
+      return a.chain(sqrt_a, 0.5 / sqrt_a, -0.25 / (sqrt_a * a._val));
+    else
+      return a.chain(sqrt_a, 0.5 / sqrt_a);
   }
   friend TDenseVar abs(const TDenseVar &a) {
-    return a.chain(a._val, a._val >= 0 ? 1 : -1, 0);
+    if constexpr (compute_hessian)
+      return a.chain(a._val, a._val >= 0 ? 1 : -1, 0);
+    else
+      return a.chain(a._val, a._val >= 0 ? 1 : -1);
   }
-  friend TDenseVar pow(const TDenseVar &a, double exponent) {
+  template <typename T>
+  friend TDenseVar pow(const TDenseVar &a, const T &exponent)
+    requires(std::is_arithmetic<T>::value && compute_hessian)
+  {
     double f2 = std::pow(a.val(), exponent - 2);
     double f1 = f2 * a.val();
     double f = f1 * a.val();
 
     return a.chain(f, exponent * f1, exponent * (exponent - 1) * f2);
   }
-  friend TDenseVar pow(const TDenseVar &a, const int exponent) {
-    double f2 = std::pow(a.val(), exponent - 2);
-    double f1 = f2 * a.val();
+  template <typename T>
+  friend TDenseVar pow(const TDenseVar &a, const T &exponent)
+    requires(std::is_arithmetic<T>::value && !compute_hessian)
+  {
+    double f1 = std::pow(a.val(), exponent - 1);
     double f = f1 * a.val();
 
-    return a.chain(f, exponent * f1, exponent * (exponent - 1) * f2);
+    return a.chain(f, exponent * f1);
   }
   friend TDenseVar exp(const TDenseVar &a) {
     double val = std::exp(a._val);
-    return a.chain(val, val, val);
+    if constexpr (compute_hessian) {
+      return a.chain(val, val, val);
+    } else {
+      return a.chain(val, val);
+    }
   }
   friend TDenseVar log(const TDenseVar &a) {
-    return a.chain(std::log(a._val), 1 / a._val, -1 / (a._val * a._val));
+    if constexpr (compute_hessian) {
+      return a.chain(std::log(a._val), 1 / a._val, -1 / (a._val * a._val));
+    } else {
+      return a.chain(std::log(a._val), 1 / a._val);
+    }
   }
   friend TDenseVar sin(const TDenseVar &a) {
     double sinval = std::sin(a._val);
-    return a.chain(sinval, std::cos(a._val), -sinval);
+    if constexpr (compute_hessian) {
+      return a.chain(sinval, std::cos(a._val), -sinval);
+    } else {
+      return a.chain(sinval, std::cos(a._val));
+    }
   }
   friend TDenseVar cos(const TDenseVar &a) {
     double cosval = std::cos(a._val);
-    return a.chain(cosval, -std::sin(a._val), -cosval);
+    if constexpr (compute_hessian) {
+      return a.chain(cosval, -std::sin(a._val), -cosval);
+    } else {
+      return a.chain(cosval, -std::sin(a._val));
+    }
   }
   friend TDenseVar atan2(const TDenseVar &y, const TDenseVar &x) {
     double val = std::atan2(y._val, x._val);
@@ -292,13 +326,23 @@ public:
 private:
   double _val = 0.0;
   KVEC _grad = KVEC::Zero();
-  KMAT _hessian = KMAT::Zero();
+  struct Empty {
+    static Empty Zero() { return Empty(); }
+    friend std::ostream &operator<<(std::ostream &s, const Empty &) {
+      return s;
+    }
+  };
+  typename std::conditional<compute_hessian, KMAT, Empty>::type _hessian =
+      decltype(_hessian)::Zero();
 };
 
-template<int k>
-TDenseVar<k> sqr(const TDenseVar<k> &a) {
+template <int k, bool compute_hessian>
+TDenseVar<k, compute_hessian> sqr(const TDenseVar<k, compute_hessian> &a) {
+  if constexpr (compute_hessian)
     return a.chain(a.val() * a.val(), 2 * a.val(), 2);
-  }
+  else
+    return a.chain(a.val() * a.val(), 2 * a.val());
+}
 
 } // namespace Optiz
 
@@ -308,10 +352,11 @@ namespace Eigen {
  * See https://eigen.tuxfamily.org/dox/TopicCustomizing_CustomScalar.html
  * and https://eigen.tuxfamily.org/dox/structEigen_1_1NumTraits.html
  */
-template <int k> struct NumTraits<Optiz::TDenseVar<k>> : NumTraits<double> {
-  typedef Optiz::TDenseVar<k> Real;
-  typedef Optiz::TDenseVar<k> NonInteger;
-  typedef Optiz::TDenseVar<k> Nested;
+template <int k, bool compute_hessian>
+struct NumTraits<Optiz::TDenseVar<k, compute_hessian>> : NumTraits<double> {
+  typedef Optiz::TDenseVar<k, compute_hessian> Real;
+  typedef Optiz::TDenseVar<k, compute_hessian> NonInteger;
+  typedef Optiz::TDenseVar<k, compute_hessian> Nested;
 
   enum {
     IsComplex = 0,
@@ -324,14 +369,16 @@ template <int k> struct NumTraits<Optiz::TDenseVar<k>> : NumTraits<double> {
   };
 };
 
-template <typename BinaryOp, int k>
-struct ScalarBinaryOpTraits<Optiz::TDenseVar<k>, double, BinaryOp> {
-  typedef Optiz::TDenseVar<k> ReturnType;
+template <typename BinaryOp, int k, bool compute_hessian>
+struct ScalarBinaryOpTraits<Optiz::TDenseVar<k, compute_hessian>, double,
+                            BinaryOp> {
+  typedef Optiz::TDenseVar<k, compute_hessian> ReturnType;
 };
 
-template <typename BinaryOp, int k>
-struct ScalarBinaryOpTraits<double, Optiz::TDenseVar<k>, BinaryOp> {
-  typedef Optiz::TDenseVar<k> ReturnType;
+template <typename BinaryOp, int k, bool compute_hessian>
+struct ScalarBinaryOpTraits<double, Optiz::TDenseVar<k, compute_hessian>,
+                            BinaryOp> {
+  typedef Optiz::TDenseVar<k, compute_hessian> ReturnType;
 };
 
 } // namespace Eigen

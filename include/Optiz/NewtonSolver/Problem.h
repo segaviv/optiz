@@ -220,11 +220,11 @@ public:
     return add_element_energy<k>(num, CONVERT_TEMPLATE_ELEMENT_FUNC(energy),
                                  project_hessian);
   }
-  template <int k, typename EnergyProvider, IS_ELEMENT_FUNC(EnergyProvider)>
+  template <int k, bool compute_hessian = true, typename EnergyProvider, IS_ELEMENT_FUNC(EnergyProvider)>
   Problem &add_element_energy(int num, const EnergyProvider &energy,
                               bool project_hessian = true) {
     energies.push_back(InternalEnergy{
-        .derivatives_func = element_func<k>(num, energy, project_hessian),
+        .derivatives_func = element_func<k, compute_hessian>(num, energy, project_hessian),
         .value_func = val_func(num, energy)});
     return *this;
   }
