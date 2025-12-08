@@ -39,8 +39,7 @@ public:
     }
     return result;
   }
-  template<int k>
-  Eigen::RowVector<T, k> row(int i) const {
+  template <int k> Eigen::RowVector<T, k> row(int i) const {
     Eigen::RowVector<T, k> result;
     for (int j = 0; j < k; j++) {
       result(j) = operator()(i, j);
@@ -94,23 +93,59 @@ private:
   std::vector<VarFactoryWithOffset> var_factories;
 };
 
+template <typename T>
+class TVarFactoryWithOffset : public TGenericVariableFactory<T> {
+public:
+  TVarFactoryWithOffset(const Eigen::VectorXd &init,
+                        const std::pair<int, int> &shape, int offset,
+                        const std::shared_ptr<void> &state = nullptr)
+      : TGenericVariableFactory<T>(init, shape, state) {}
+  T operator()(int i) const {
+    return T(this->_current(i + offset), i + offset);
+  }
+  T operator()(int i, int j) const {
+    int index = offset + i + j * this->shape.first;
+    return T(this->_current(index), index);
+  }
+
+private:
+  int offset;
+};
+
 template <typename T> class TVarFactory : public TGenericVariableFactory<T> {
 public:
   TVarFactory(const Eigen::VectorXd &init, const std::pair<int, int> &shape,
               const std::shared_ptr<void> &state = nullptr)
       : TGenericVariableFactory<T>(init, shape, state) {}
+  // Initialize from another generic factory.
+  template <typename G>
+  TVarFactory(const TGenericVariableFactory<G> &other)
+      : TGenericVariableFactory<T>(other.current(), other.shape,
+                                   other.get_state(), other.block_shapes) {
+    for (int i = 0; i < this->block_shapes.size(); i++) {
+      var_factories.push_back(
+          TVarFactoryWithOffset<T>(this->_current, this->block_shapes[i],
+                                   this->offsets[i], this->state));
+    }
+  }
   T operator()(int i) const { return T(this->_current(i), i); }
   T operator()(int i, int j) const {
     int index = i + j * this->shape.first;
     return T(this->_current(index), index);
   }
+  const TGenericVariableFactory<T> &var_block(int index) const {
+    return var_factories[index];
+  }
+
+private:
+  std::vector<TVarFactoryWithOffset<T>> var_factories;
 };
 
 template <typename T> class ValFactory : public TGenericVariableFactory<T> {
 public:
   ValFactory(const Eigen::VectorXd &init, const std::pair<int, int> &shape,
              const std::shared_ptr<void> &state = nullptr,
-            const std::vector<std::pair<int, int>> &block_shapes = {})
+             const std::vector<std::pair<int, int>> &block_shapes = {})
       : TGenericVariableFactory<T>(init, shape, state, block_shapes) {}
 
   T operator()(int i) const { return this->_current(i); }

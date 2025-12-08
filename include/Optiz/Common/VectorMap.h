@@ -29,6 +29,9 @@ public:
     return V();
   }
 
+  std::vector<std::pair<K, V>>& get_std_vector() { return values; }
+  const std::vector<std::pair<K, V>>& get_std_vector() const { return values; }
+
   class iterator {
   public:
     iterator(typename std::vector<std::pair<K, V>>::iterator it) : it(it) {}

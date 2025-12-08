@@ -1,4 +1,6 @@
 #include "ElementFunc.h"
+#include "VarFactory.h"
+#include "VarGrad.h"
 
 #include <Eigen/Eigen>
 
@@ -47,6 +49,71 @@ EnergyFunc element_func(int num, SparseEnergyFunc<Var> delegate,
       }
     }
 
+    return {f, grad, triplets};
+  };
+}
+
+EnergyFunc element_residual(int num, SparseEnergyFunc<VarGrad> delegate){
+  return [num, delegate](
+             const TGenericVariableFactory<Var> &vars) -> ValueAndDerivatives {
+    int num_vars = vars.num_vars();
+    double f = 0.0;
+    Eigen::VectorXd grad = Eigen::VectorXd::Zero(num_vars);
+    std::vector<Eigen::Triplet<double>> triplets;
+    TVarFactory<VarGrad> var_factory(vars);
+// Aggregate the values.
+#pragma omp parallel for schedule(static) reduction(+ : f)                     \
+    reduction(merge : triplets) num_threads(omp_get_max_threads() - 1)
+    for (int i = 0; i < num; i++) {
+      VarGrad res = delegate(i, var_factory);
+
+      // Aggregate the result.
+      auto &local_grad = res.grad();
+      // Value.
+      f += 0.5 * res.val() * res.val();
+
+      // Grad.
+      for (const auto &[row, val2] : res.grad()) {
+#pragma omp atomic
+        grad(row) += val2 * res.val();
+      }
+      // Approx Hessian.
+      for (int j = 0; j < res.grad().size(); j++) {
+        for (int h = 0; h <= j; h++) {
+          const auto &[gj, valj] = res.grad().get_values().get_std_vector()[j];
+          const auto &[gh, valh] = res.grad().get_values().get_std_vector()[h];
+          double val = valj * valh;
+          // Only fill the lower triangle of the hessian.
+          if (gj <= gh) {
+            triplets.emplace_back(gh, gj, val);
+          } else {
+            triplets.emplace_back(gj, gh, val);
+          }
+        }
+      }
+    }
+    return {f, grad, triplets};
+  };
+};
+
+EnergyFunc grad_element_func(int num, SparseEnergyFunc<VarGrad> delegate) {
+  return [num, delegate](
+             const TGenericVariableFactory<Var> &vars) -> ValueAndDerivatives {
+    double f = 0.0;
+    Eigen::VectorXd grad = Eigen::VectorXd::Zero(vars.num_vars());
+    std::vector<Eigen::Triplet<double>> triplets;
+    TVarFactory<VarGrad> var_factory(vars);
+// Parallel compute all the values.
+#pragma omp parallel for schedule(static)
+    for (int i = 0; i < num; i++) {
+      VarGrad val = delegate(i, var_factory);
+      f += val.val();
+
+      for (const auto &[row, val2] : val.grad()) {
+#pragma omp atomic
+        grad(row) += val2;
+      }
+    }
     return {f, grad, triplets};
   };
 }

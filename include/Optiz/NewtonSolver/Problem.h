@@ -88,7 +88,7 @@ public:
     } report_level = EVERY_STEP;
 
     int num_iterations = 50;
-    int line_search_iterations = 10;
+    int line_search_iterations = 50;
     double step_decrease_factor = 0.6;
 
     // Stop the optimization if the relative change to the energy
@@ -187,6 +187,13 @@ public:
     return add_element_energy(
         num_elements, CONVERT_TEMPLATE_ELEMENT_FUNC(energy), project_hessian);
   }
+  template <typename EnergyProvider, IS_ELEMENT_FUNC(EnergyProvider)>
+  Problem &add_grad_element_energy(int num_elements, const EnergyProvider &energy) {
+    energies.push_back(InternalEnergy{
+        .derivatives_func = grad_element_func(num_elements, energy),
+        .value_func = val_func(num_elements, energy)});
+    return *this;
+  }
 
   template <typename EnergyProvider>
   Problem &add_meta_element_energy(int num_elements,
@@ -220,14 +227,37 @@ public:
     return add_element_energy<k>(num, CONVERT_TEMPLATE_ELEMENT_FUNC(energy),
                                  project_hessian);
   }
-  template <int k, bool compute_hessian = true, typename EnergyProvider, IS_ELEMENT_FUNC(EnergyProvider)>
+  template <int k, bool compute_hessian = true, typename EnergyProvider,
+            IS_ELEMENT_FUNC(EnergyProvider)>
   Problem &add_element_energy(int num, const EnergyProvider &energy,
                               bool project_hessian = true) {
     energies.push_back(InternalEnergy{
-        .derivatives_func = element_func<k, compute_hessian>(num, energy, project_hessian),
+        .derivatives_func =
+            element_func<k, compute_hessian>(num, energy, project_hessian),
         .value_func = val_func(num, energy)});
     return *this;
   }
+
+  template <int k, typename EnergyProvider, IS_ELEMENT_FUNC(EnergyProvider)>
+  Problem &add_element_residual(int num, const EnergyProvider &energy) {
+    energies.push_back(
+        InternalEnergy{.derivatives_func = element_residual<k>(num, energy),
+                       .value_func = val_func(num, [energy](int i, auto &x) {
+                         return 0.5 * sqr(energy(i, x));
+                       })});
+    return *this;
+  }
+
+  template <typename EnergyProvider, IS_ELEMENT_FUNC(EnergyProvider)>
+  Problem &add_element_residual(int num, const EnergyProvider &energy) {
+    energies.push_back(
+        InternalEnergy{.derivatives_func = element_residual(num, energy),
+                       .value_func = val_func(num, [energy](int i, auto &x) {
+                         return 0.5 * sqr(energy(i, x));
+                       })});
+    return *this;
+  }
+  
 
   template <typename EnergyProvider, IS_ENERGY_FUNC(EnergyProvider)>
   Problem &add_energy(EnergyProvider provider) {

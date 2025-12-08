@@ -10,6 +10,7 @@
 #include "../Autodiff/MetaVar.h"
 #include "../Autodiff/TDenseVar.h"
 #include "../Autodiff/Var.h"
+#include "../Autodiff/VarGrad.h"
 #include "VarFactory.h"
 
 #pragma omp declare reduction(                                                 \
@@ -35,6 +36,8 @@ using GenericEnergyFunc = std::function<T(const TGenericVariableFactory<T> &)>;
 
 EnergyFunc element_func(int num, SparseEnergyFunc<Var> delegate,
                         bool project_hessian = true);
+EnergyFunc grad_element_func(int num, SparseEnergyFunc<VarGrad> delegate);
+EnergyFunc element_residual(int num, SparseEnergyFunc<VarGrad> delegate);
 
 GenericEnergyFunc<double> val_func(int num, SparseEnergyFunc<double> delegate);
 
@@ -199,6 +202,51 @@ EnergyFunc element_func(int num, auto delegate, bool project_hessian = true) {
             } else {
               triplets.emplace_back(gj, gh, val);
             }
+          }
+        }
+      }
+    }
+    return {f, grad, triplets};
+  };
+};
+
+template <int k> EnergyFunc element_residual(int num, auto delegate) {
+  return [num, delegate](
+             const TGenericVariableFactory<Var> &vars) -> ValueAndDerivatives {
+    int num_vars = vars.num_vars();
+    double f = 0.0;
+    Eigen::VectorXd grad = Eigen::VectorXd::Zero(num_vars);
+    std::vector<Eigen::Triplet<double>> triplets;
+    triplets.reserve(k * k * num);
+// Aggregate the values.
+#pragma omp parallel for schedule(static) reduction(+ : f)                     \
+    reduction(merge : triplets) num_threads(omp_get_max_threads() - 1)
+    for (int i = 0; i < num; i++) {
+      LocalVarFactory<k, false> local_vars(vars.current_mat(), vars.get_state(),
+                                           vars.block_shapes, vars.offsets);
+      TDenseVar<k, false> res = delegate(i, local_vars);
+
+      // Aggregate the result.
+      auto &local_grad = res.grad();
+      // Value.
+      f += 0.5 * res.val() * res.val();
+
+      // Grad.
+      for (int j = 0; j < local_vars.num_referenced; j++) {
+#pragma omp atomic
+        grad(local_vars.local_to_global[j]) += local_grad(j) * res.val();
+      }
+      // Approx Hessian.
+      for (int j = 0; j < local_vars.num_referenced; j++) {
+        for (int h = 0; h <= j; h++) {
+          int gj = local_vars.local_to_global[j],
+              gh = local_vars.local_to_global[h];
+          double val = local_grad(j) * local_grad(h);
+          // Only fill the lower triangle of the hessian.
+          if (gj <= gh) {
+            triplets.emplace_back(gh, gj, val);
+          } else {
+            triplets.emplace_back(gj, gh, val);
           }
         }
       }
