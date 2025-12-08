@@ -78,7 +78,8 @@ EnergyFunc element_residual(int num, SparseEnergyFunc<VarGrad> delegate){
         grad(row) += val2 * res.val();
       }
       // Approx Hessian.
-      for (int j = 0; j < res.grad().size(); j++) {
+      int num_referenced = res.grad().get_values().get_std_vector().size();
+      for (int j = 0; j < num_referenced; j++) {
         for (int h = 0; h <= j; h++) {
           const auto &[gj, valj] = res.grad().get_values().get_std_vector()[j];
           const auto &[gh, valh] = res.grad().get_values().get_std_vector()[h];

@@ -99,7 +99,7 @@ public:
   TVarFactoryWithOffset(const Eigen::VectorXd &init,
                         const std::pair<int, int> &shape, int offset,
                         const std::shared_ptr<void> &state = nullptr)
-      : TGenericVariableFactory<T>(init, shape, state) {}
+      : TGenericVariableFactory<T>(init, shape, state), offset(offset) {}
   T operator()(int i) const {
     return T(this->_current(i + offset), i + offset);
   }
