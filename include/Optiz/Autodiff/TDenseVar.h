@@ -10,7 +10,8 @@ namespace Optiz {
 
 /**
  * @brief Forward 2nd/1st-order automatic differentiation variable, with up to k
- * variables, storing dense gradient and dense hessian (if compute_hessian is true).
+ * variables, storing dense gradient and dense hessian (if compute_hessian is
+ * true).
  *
  * @tparam k Maximum number of variables.
  * @tparam compute_hessian Whether to compute and store the hessian.
@@ -209,10 +210,7 @@ public:
       return a.chain(sqrt_a, 0.5 / sqrt_a);
   }
   friend TDenseVar abs(const TDenseVar &a) {
-    if constexpr (compute_hessian)
-      return a.chain(a._val, a._val >= 0 ? 1 : -1, 0);
-    else
-      return a.chain(a._val, a._val >= 0 ? 1 : -1);
+    return a._val >= 0 ? a : (-a);
   }
   template <typename T>
   friend TDenseVar pow(const TDenseVar &a, const T &exponent)

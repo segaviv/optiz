@@ -305,9 +305,11 @@ Var sqr(Var &&a) {
   a.chain_this(a._val * a._val, 2 * a._val, 2);
   return a;
 }
-Var abs(const Var &a) { return a.chain(a._val, a._val >= 0 ? 1 : -1, 0); }
+Var abs(const Var &a) { return a._val >= 0 ? a : (-a); }
 Var abs(Var &&a) {
-  a.chain_this(a._val, a._val >= 0 ? 1 : -1, 0);
+  if (a._val < 0) {
+    a.neg();
+  }
   return a;
 }
 Var pow(const Var &a, const int exponent) {

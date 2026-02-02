@@ -201,7 +201,7 @@ public:
     return a.chain(sqrt_a, 0.5 / sqrt_a, -0.25 / (sqrt_a * a._val));
   }
   friend TVar abs(const TVar &a) {
-    return a.chain(a._val, a._val >= 0 ? 1 : -1, 0);
+    return a._val >= 0 ? a : (-a);
   }
   friend TVar pow(const TVar &a, double exponent) {
     double f2 = std::pow(a.val(), exponent - 2);

@@ -259,10 +259,12 @@ VarGrad sqr(VarGrad &&a) {
   return a;
 }
 VarGrad abs(const VarGrad &a) {
-  return a.chain(a._val, a._val >= 0 ? 1 : -1);
+  return a._val >= 0 ? a : (-a);
 }
 VarGrad abs(VarGrad &&a) {
-  a.chain_this(a._val, a._val >= 0 ? 1 : -1);
+  if (a._val < 0) {
+    a.neg();
+  }
   return a;
 }
 VarGrad pow(const VarGrad &a, const int exponent) {
