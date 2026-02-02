@@ -36,7 +36,6 @@ concept InheritsFromMetaBase = inherits_from_meta_base<T>::value;
 
 /**
  * @brief Calculates gradient in forward mode, hessian in reverse.
- * Quick & dirty implementation. Maybe it works, who knows.
  * The variable indices have to be known at compile time.
  *
  * @param Derived the derived expression

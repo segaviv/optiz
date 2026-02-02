@@ -8,6 +8,13 @@
 
 namespace Optiz {
 
+/**
+ * @brief Forward 2nd/1st-order automatic differentiation variable, with up to k
+ * variables, storing dense gradient and dense hessian (if compute_hessian is true).
+ *
+ * @tparam k Maximum number of variables.
+ * @tparam compute_hessian Whether to compute and store the hessian.
+ */
 template <int k, bool compute_hessian = true> class TDenseVar {
 public:
   using KVEC = Eigen::Matrix<double, k, 1>;

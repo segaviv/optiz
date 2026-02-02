@@ -7,6 +7,10 @@
 
 namespace Optiz {
 
+/**
+ * @brief Forward 1st-order automatic differentiation variable, storing a sparse
+ * gradient. Least efficient, but good for quick prototyping.
+ */
 class VarGrad {
 public:
   VarGrad();
@@ -14,8 +18,7 @@ public:
   VarGrad(const double val, int index);
   VarGrad(const VarGrad &);
   VarGrad(VarGrad &&) noexcept;
-  VarGrad(double var, const SparseVector &grad)
-      : _val(var), _grad(grad) {}
+  VarGrad(double var, const SparseVector &grad) : _val(var), _grad(grad) {}
 
   VarGrad &operator=(const VarGrad &other) = default;
   VarGrad &operator=(VarGrad &&);
@@ -23,10 +26,13 @@ public:
 
   template <int Rows, int Cols>
   static Eigen::Matrix<VarGrad, Rows, Cols>
-  from_eigen(const Eigen::Matrix<double, Rows, Cols> &mat, int start_index = 0) {
+  from_eigen(const Eigen::Matrix<double, Rows, Cols> &mat,
+             int start_index = 0) {
     return Eigen::Matrix<VarGrad, Rows, Cols>::NullaryExpr(
-        mat.rows(), mat.cols(), [&mat, start_index](Eigen::Index i, Eigen::Index j) {
-          return VarGrad(mat(i, j), static_cast<int>(start_index + i + j * mat.rows()));
+        mat.rows(), mat.cols(),
+        [&mat, start_index](Eigen::Index i, Eigen::Index j) {
+          return VarGrad(mat(i, j),
+                         static_cast<int>(start_index + i + j * mat.rows()));
         });
   }
 
@@ -124,8 +130,9 @@ public:
   friend VarGrad sin(VarGrad &&a);
   friend VarGrad atan(const VarGrad &x);
   friend VarGrad atan2(const VarGrad &y, const VarGrad &x);
-  friend VarGrad chain2(const VarGrad &x, const VarGrad &y, double val, double dx,
-                    double dy, double dxdx, double dxdy, double dydy);
+  friend VarGrad chain2(const VarGrad &x, const VarGrad &y, double val,
+                        double dx, double dy, double dxdx, double dxdy,
+                        double dydy);
   friend bool isfinite(const VarGrad &x);
   friend bool isinf(const VarGrad &x);
 
