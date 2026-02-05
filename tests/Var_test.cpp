@@ -138,7 +138,7 @@ TEST(Var, rotation) {
     }
     // Finite difference hessian.
     Eigen::MatrixXd fd_hessian = finite_difference_hessian(
-        [&](const Eigen::VectorXd &v) { return func(i, v); }, vars, 1e-6);
+        [&](const Eigen::VectorXd &v) { return func(i, v); }, vars, 1e-4);
     for (int j = 0; j < 7; j++) {
       for (int k = 0; k < 7; k++) {
         EXPECT_NEAR(autodiff.hessian()(j, k), fd_hessian(j, k), 1e-4);

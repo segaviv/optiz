@@ -214,8 +214,8 @@ QuadraticObjectiveD::MatType QuadraticObjectiveD::solve() {
   }
   // Add the known vars.
   MatType sol_full(n, sol.cols());
-  sol_full(_unknown_indices, Eigen::all) = sol.topRows(n_free);
-  sol_full(_known_indices, Eigen::all) = _knowns_vals;
+  sol_full(_unknown_indices, Eigen::placeholders::all) = sol.topRows(n_free);
+  sol_full(_known_indices, Eigen::placeholders::all) = _knowns_vals;
   return sol_full.cols() == 1 && variable_shape.size() > 1
              ? sol_full.reshaped(variable_shape[0], variable_shape[1]).eval()
              : sol_full;

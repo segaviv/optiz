@@ -381,7 +381,7 @@ void Problem::set_fixed_rows(const std::vector<int> &rows_indices,
                              const Eigen::MatrixXd &vals) {
   if (vals.rows() == rows_indices.size() && vals.cols() == _cur_shape.second) {
     Eigen::Map<Eigen::MatrixXd>(_cur.data(), _cur_shape.first,
-                                _cur_shape.second)(rows_indices, Eigen::all) =
+                                _cur_shape.second)(rows_indices, Eigen::placeholders::all) =
         vals;
   }
   std::vector<int> indices(rows_indices.size() * _cur_shape.second);

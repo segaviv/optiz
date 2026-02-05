@@ -14,6 +14,8 @@ Var::Var(const double val, int index) : Var(val) { _grad.insert(index) = 1.0; }
 Var &Var::operator=(Var &&) = default;
 Var &Var::operator=(double val) {
   _val = val;
+  _grad = SparseVector();
+  _hessian = SelfAdjointMapMatrix();
   return *this;
 }
 
