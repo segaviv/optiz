@@ -95,9 +95,9 @@ SelfAdjointMapMatrix::operator std::vector<Eigen::Triplet<double>>() const {
   return triplets;
 }
 
-Eigen::MatrixXd SelfAdjointMapMatrix::to_dense() const {
-  int s = n();
-  Eigen::MatrixXd res(s, s);
+Eigen::MatrixXd SelfAdjointMapMatrix::to_dense(int num_vars) const {
+  int s = num_vars < 0 ? n() : num_vars;
+  Eigen::MatrixXd res = Eigen::MatrixXd::Zero(s, s);
   for (const auto &val : values) {
     res(val.first.row, val.first.col) = val.second;
     res(val.first.col, val.first.row) = val.second;

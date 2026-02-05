@@ -42,7 +42,7 @@ public:
 
   operator std::vector<Eigen::Triplet<double>>() const;
   operator Eigen::SparseMatrix<double>() const;
-  Eigen::MatrixXd to_dense() const;
+  Eigen::MatrixXd to_dense(int num_vars = -1) const;
 
   const inline VectorMap<CellIndex, double> &get_values() const {
     return values;
