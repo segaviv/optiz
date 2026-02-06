@@ -4,6 +4,7 @@
 #endif
 
 #include <Eigen/Eigen>
+#include <cassert>
 #include <memory>
 #include <vector>
 
